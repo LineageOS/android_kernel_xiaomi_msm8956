@@ -6628,7 +6628,6 @@ static int qseecom_probe(struct platform_device *pdev)
 		}
 		if (qseecom.appsbl_qseecom_support) {
 			qseecom.commonlib_loaded = true;
-			qseecom.commonlib64_loaded = true;
 		}
 	} else {
 		qseecom_platform_support = (struct msm_bus_scale_pdata *)
