@@ -580,12 +580,6 @@ static int mdss_dsi_set_col_page_addr(struct mdss_panel_data *pdata,
 		}
 	}
 
-#ifdef CONFIG_YULONG_COLOR
-	color_enhancement_impl_apply();
-#endif
-
-	mdss_livedisplay_update(ctrl, MODE_UPDATE_ALL);
-
 end:
 	return 0;
 }
