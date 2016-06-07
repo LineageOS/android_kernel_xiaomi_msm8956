@@ -830,6 +830,7 @@
 	};
 
 	qcom,bcl {
+		label = "bcl";
 		compatible = "qcom,bcl";
 		qcom,bcl-enable;
 		qcom,bcl-framework-interface;
