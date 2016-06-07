@@ -640,6 +640,11 @@ config MSM_TEST_PACMAN
 	  Low Speed Peripheral (BLSP) ownership transfer from one subsystem
 	  to another.
 
+config MSM_CORE_CTL
+	tristate "Core control module"
+	help
+	  Add support for the Qualcomm core control module
+
 config MSM_CORE_CTL_HELPER
 	tristate "Core control helper functions for dynamically hotplug CPUs"
 	help
