@@ -8063,6 +8063,9 @@ typedef void  (*WDI_FatalEventLogsRspCb)(
 
 typedef void  (*WDI_MonModeRspCb)(void *pEventData,void *pUserData);
 
+typedef void (*WDI_AntennaDivSelRspCb)(WDI_Status status,
+              void *resp, void *pUserData);
+
 /*========================================================================
  *     Function Declarations and Documentation
  ==========================================================================*/
@@ -11605,5 +11608,23 @@ wpt_uint32 val
 #ifdef __cplusplus
  }
 #endif 
+
+/**
+ @brief WDI_GetCurrentAntennaIndex
+    This API is called to send getCurretAntennaIndex request to FW
+
+ @param pUserData: pointer to request params
+        wdiLLStatsSetRspCb     : set wificonfig response callback
+        reserved: request parameter
+ @see
+ @return SUCCESS or FAIL
+*/
+WDI_Status
+WDI_GetCurrentAntennaIndex
+(
+  void *pUserData,
+  WDI_AntennaDivSelRspCb wdiAntennaDivSelRspCb,
+  wpt_uint32 reserved
+);
 
 #endif /* #ifndef WLAN_QCT_WDI_H */

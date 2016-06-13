@@ -3714,4 +3714,8 @@ eHalStatus sme_fatal_event_logs_req(tHalHandle hHal, tANI_U32 is_fatal,
 eHalStatus sme_enableDisableChanAvoidIndEvent(tHalHandle hHal,
                                               tANI_U8 set_value);
 
+eHalStatus sme_GetCurrentAntennaIndex(tHalHandle hHal,
+                                      tCsrAntennaIndexCallback callback,
+                                      void *pContext, tANI_U8 sessionId);
+
 #endif //#if !defined( __SME_API_H )

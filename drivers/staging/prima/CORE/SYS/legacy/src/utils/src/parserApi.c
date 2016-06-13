@@ -1585,7 +1585,8 @@ PopulateDot11fSuppRates(tpAniSirGlobal      pMac,
 tSirRetStatus
 PopulateDot11fRatesTdls(tpAniSirGlobal p_mac,
                            tDot11fIESuppRates *p_supp_rates,
-                           tDot11fIEExtSuppRates *p_ext_supp_rates)
+                           tDot11fIEExtSuppRates *p_ext_supp_rates,
+                           tANI_U8 curr_oper_channel)
 {
     tSirMacRateSet temp_rateset;
     tSirMacRateSet temp_rateset2;
@@ -1595,15 +1596,22 @@ PopulateDot11fRatesTdls(tpAniSirGlobal p_mac,
     wlan_cfgGetInt(p_mac, WNI_CFG_DOT11_MODE, &self_dot11mode);
 
     /**
-     * Include 11b rates only when the device configured in
-     * auto, 11a/b/g or 11b_only
+     * Include 11b rates only when the device configured
+     * in auto, 11a/b/g or 11b_only and also if current base
+     * channel is 5 GHz then no need to advertise the 11b rates.
+     * If devices to move 2.4GHz off-channel then they can communicate
+     * in 11g rates i.e. (6, 9, 12, 18, 24, 36 and 54).
      */
-    if ((self_dot11mode == WNI_CFG_DOT11_MODE_ALL) ||
+    limLog(p_mac, LOG1, FL("Current operating channel %d self_dot11mode = %d"),
+           curr_oper_channel, self_dot11mode);
+
+    if ((curr_oper_channel <= SIR_11B_CHANNEL_END) &&
+        ((self_dot11mode == WNI_CFG_DOT11_MODE_ALL) ||
         (self_dot11mode == WNI_CFG_DOT11_MODE_11A) ||
         (self_dot11mode == WNI_CFG_DOT11_MODE_11AC) ||
         (self_dot11mode == WNI_CFG_DOT11_MODE_11N) ||
         (self_dot11mode == WNI_CFG_DOT11_MODE_11G) ||
-        (self_dot11mode == WNI_CFG_DOT11_MODE_11B) )
+        (self_dot11mode == WNI_CFG_DOT11_MODE_11B)))
     {
             val = WNI_CFG_SUPPORTED_RATES_11B_LEN;
             wlan_cfgGetStr(p_mac, WNI_CFG_SUPPORTED_RATES_11B,
@@ -3069,14 +3077,19 @@ sirFillBeaconMandatoryIEforEseBcnReport(tpAniSirGlobal   pMac,
            retStatus = eSIR_FAILURE;
            goto err_bcnrep;
        }
-       *pos = SIR_MAC_RATESET_EID;
-       pos++;
-       *pos = eseBcnReportMandatoryIe.supportedRates.numRates;
-       pos++;
-       vos_mem_copy(pos, (tANI_U8*)eseBcnReportMandatoryIe.supportedRates.rate,
-                    eseBcnReportMandatoryIe.supportedRates.numRates);
-       pos += eseBcnReportMandatoryIe.supportedRates.numRates;
-       freeBytes -= (1 + 1 + eseBcnReportMandatoryIe.supportedRates.numRates);
+       if (eseBcnReportMandatoryIe.supportedRates.numRates <=
+             SIR_MAC_RATESET_EID_MAX) {
+           *pos = SIR_MAC_RATESET_EID;
+           pos++;
+           *pos = eseBcnReportMandatoryIe.supportedRates.numRates;
+           pos++;
+           vos_mem_copy(pos,
+                        (tANI_U8*)eseBcnReportMandatoryIe.supportedRates.rate,
+                        eseBcnReportMandatoryIe.supportedRates.numRates);
+           pos += eseBcnReportMandatoryIe.supportedRates.numRates;
+           freeBytes -= (1 + 1 +
+                         eseBcnReportMandatoryIe.supportedRates.numRates);
+       }
     }
 
     /* Fill FH Parameter set IE */

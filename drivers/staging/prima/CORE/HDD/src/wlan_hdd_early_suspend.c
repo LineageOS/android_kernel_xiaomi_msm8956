@@ -1508,7 +1508,8 @@ static void hdd_PowerStateChangedCB
    /* if the driver was not in BMPS during early suspend,
     * the dynamic DTIM is now updated at Riva */
    if ((newState == BMPS) && pHddCtx->hdd_wlan_suspended
-           && pHddCtx->cfg_ini->enableDynamicDTIM
+           && (pHddCtx->cfg_ini->enableDynamicDTIM ||
+               pHddCtx->cfg_ini->enableModulatedDTIM)
            && (pHddCtx->hdd_ignore_dtim_enabled == FALSE))
    {
        pHddCtx->hdd_ignore_dtim_enabled = TRUE;
@@ -2329,6 +2330,7 @@ err_vosclose:
        pHddCtx->cfg_ini= NULL;
 
        wiphy_unregister(pHddCtx->wiphy);
+       hdd_wlan_free_wiphy_channels(pHddCtx->wiphy);
        wiphy_free(pHddCtx->wiphy);
    }
    vos_preClose(&pVosContext);

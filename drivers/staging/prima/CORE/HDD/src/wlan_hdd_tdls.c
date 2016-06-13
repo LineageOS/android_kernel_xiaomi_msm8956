@@ -80,6 +80,7 @@ void wlan_hdd_tdls_disable_offchan_and_teardown_links(hdd_context_t *hddctx)
     u8 staIdx;
     hddTdlsPeer_t *curr_peer = NULL;
     hdd_adapter_t *adapter = NULL;
+    bool tdls_unlock = FALSE;
 
     if (eTDLS_SUPPORT_NOT_ENABLED == hddctx->tdls_mode) {
         hddLog(LOG1, FL("TDLS mode is disabled OR not enabled in FW"));
@@ -103,18 +104,29 @@ void wlan_hdd_tdls_disable_offchan_and_teardown_links(hdd_context_t *hddctx)
      * Disable TDLS Offchannel to avoid more than two concurrent channels.
      */
     if (connected_tdls_peers == 1) {
+        tSirMacAddr peer_mac;
+        int32_t channel;
+
+        mutex_lock(&hddctx->tdls_lock);
         curr_peer = wlan_hdd_tdls_get_connected_peer(adapter);
         if (curr_peer && (curr_peer->isOffChannelConfigured == TRUE)) {
             hddLog(LOG1, FL("%s: Concurrency detected, Disable "
                         "TDLS channel switch"), __func__);
             curr_peer->isOffChannelEstablished = FALSE;
+            channel = curr_peer->peerParams.channel;
+            vos_mem_copy(peer_mac, curr_peer->peerMac, sizeof(tSirMacAddr));
+            mutex_unlock(&hddctx->tdls_lock);
+
             sme_SendTdlsChanSwitchReq(WLAN_HDD_GET_HAL_CTX(adapter),
                     adapter->sessionId,
-                    curr_peer->peerMac,
-                    curr_peer->peerParams.channel,
+                    peer_mac,
+                    channel,
                     TDLS_OFF_CHANNEL_BW_OFFSET,
                     TDLS_CHANNEL_SWITCH_DISABLE);
+            tdls_unlock = TRUE;
         }
+        if (tdls_unlock == FALSE)
+            mutex_unlock(&hddctx->tdls_lock);
     }
 
     /* Send Msg to PE for sending deauth and deleting all the TDLS peers */
@@ -1468,7 +1480,8 @@ int wlan_hdd_tdls_set_peer_caps(hdd_adapter_t *pAdapter,
                                 u8 *mac,
                                 tCsrStaParams *StaParams,
                                 tANI_BOOLEAN isBufSta,
-                                tANI_BOOLEAN isOffChannelSupported)
+                                tANI_BOOLEAN isOffChannelSupported,
+                                tANI_BOOLEAN isQosWmmSta)
 {
     hddTdlsPeer_t *curr_peer;
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
@@ -1504,7 +1517,7 @@ int wlan_hdd_tdls_set_peer_caps(hdd_adapter_t *pAdapter,
 
     curr_peer->supported_oper_classes_len =
                StaParams->supported_oper_classes_len;
-    curr_peer->qos = StaParams->capability & CAPABILITIES_QOS_OFFSET;
+    curr_peer->qos = isQosWmmSta;
 
     mutex_unlock(&pHddCtx->tdls_lock);
     return 0;
@@ -1826,22 +1839,21 @@ int wlan_hdd_tdls_set_sta_id(hdd_adapter_t *pAdapter, u8 *mac, u8 staId)
 int wlan_hdd_tdls_set_force_peer(hdd_adapter_t *pAdapter, u8 *mac,
                                  tANI_BOOLEAN forcePeer)
 {
+    /* NOTE:
+     * Hold mutex tdls_lock before calling this function
+     */
     hddTdlsPeer_t *curr_peer;
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
 
     if ((NULL == pHddCtx)) return -1;
-
-    mutex_lock(&pHddCtx->tdls_lock);
 
     curr_peer = wlan_hdd_tdls_find_peer(pAdapter, mac, FALSE);
     if (curr_peer == NULL)
         goto error;
     curr_peer->isForcedPeer = forcePeer;
 
-    mutex_unlock(&pHddCtx->tdls_lock);
     return 0;
 error:
-    mutex_unlock(&pHddCtx->tdls_lock);
     return -1;
 }
 
@@ -2060,6 +2072,9 @@ tANI_U16 wlan_hdd_tdlsConnectedPeers(hdd_adapter_t *pAdapter)
 
 hddTdlsPeer_t *wlan_hdd_tdls_get_connected_peer(hdd_adapter_t *pAdapter)
 {
+    /* NOTE:
+     * Hold mutext tdls_lock before calling this function
+     */
     int i;
     struct list_head *head;
     struct list_head *pos;
@@ -2073,10 +2088,8 @@ hddTdlsPeer_t *wlan_hdd_tdls_get_connected_peer(hdd_adapter_t *pAdapter)
         return NULL;
     }
 
-    mutex_lock(&pHddCtx->tdls_lock);
     pHddTdlsCtx = WLAN_HDD_GET_TDLS_CTX_PTR(pAdapter);
     if (NULL == pHddTdlsCtx) {
-        mutex_unlock(&pHddCtx->tdls_lock);
         return NULL;
     }
     for (i = 0; i < 256; i++) {
@@ -2086,7 +2099,6 @@ hddTdlsPeer_t *wlan_hdd_tdls_get_connected_peer(hdd_adapter_t *pAdapter)
             curr_peer= list_entry (pos, hddTdlsPeer_t, node);
             if (curr_peer && (curr_peer->link_status == eTDLS_LINK_CONNECTED))
             {
-               mutex_unlock(&pHddCtx->tdls_lock);
                VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                           "%s: " MAC_ADDRESS_STR " eTDLS_LINK_CONNECTED",
                            __func__, MAC_ADDR_ARRAY(curr_peer->peerMac));
@@ -2094,7 +2106,6 @@ hddTdlsPeer_t *wlan_hdd_tdls_get_connected_peer(hdd_adapter_t *pAdapter)
             }
         }
     }
-    mutex_unlock(&pHddCtx->tdls_lock);
 
     EXIT();
     return NULL;
@@ -3044,6 +3055,9 @@ int wlan_hdd_set_callback(hddTdlsPeer_t *curr_peer,
                          cfg80211_exttdls_callback callback)
 {
 
+    /* NOTE:
+     * Hold mutex tdls_lock before calling this function
+     */
     hdd_context_t *pHddCtx;
     hdd_adapter_t   *pAdapter;
 
@@ -3053,14 +3067,9 @@ int wlan_hdd_set_callback(hddTdlsPeer_t *curr_peer,
     pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     if ((NULL == pHddCtx)) return -1;
 
-    mutex_lock(&pHddCtx->tdls_lock);
-
     curr_peer->state_change_notification = callback;
 
-    mutex_unlock(&pHddCtx->tdls_lock);
     return 0;
-
-
 }
 
 void wlan_hdd_tdls_get_wifi_hal_state(hddTdlsPeer_t *curr_peer,

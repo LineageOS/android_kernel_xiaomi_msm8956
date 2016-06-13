@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -263,11 +263,32 @@
 #define CFG_ENABLE_AUTO_BMPS_TIMER_MIN         ( 0 )
 #define CFG_ENABLE_AUTO_BMPS_TIMER_MAX         ( 1 )
 #define CFG_ENABLE_AUTO_BMPS_TIMER_DEFAULT     ( 1 )
+/*
+ * gEnableDynamicRAstartRate usage:
+ *
+ * 11B and 11A/G rates can be specified in multiples of 0.5
+ * So for 5.5 mbps, gEnableDynamicRAstartRate=11
+ * and for 12 mbps, gEnableDynamicRAstartRate=24 etc.
+ *
+ * for MCS 0 - 7 rates, Bit 7 should set to 1 and Bit 0-6
+ * represent the MCS index.
+ * So for MCS0, gEnableDynamicRAstartRate=128
+ * and for MCS2, gEnableDynamicRAstartRate=130 etc.
+ *
+ * Any invalid non-zero value will set the start rate
+ * to 6 mbps (value 1 will also set it to 6 mbps)
+ *
+ * Bit 8 is used to enable PER discount logic in RA
+ * Ex: if PER discount logic needs to be enabled along with
+ * RA start rate as 6mbps:
+ * (Bit 8 for PER discount logic and Bit 0 for 6 mbps)
+ * gEnableDynamicRAstartRate=257
+ */
 
 #define CFG_ENABLE_DYNAMIC_RA_START_RATE_NAME    "gEnableDynamicRAstartRate"
-#define CFG_ENABLE_DYNAMIC_RA_START_RATE_MIN     ( 0 )
-#define CFG_ENABLE_DYNAMIC_RA_START_RATE_MAX     ( 1 )
-#define CFG_ENABLE_DYNAMIC_RA_START_RATE_DEFAULT ( 0 )
+#define CFG_ENABLE_DYNAMIC_RA_START_RATE_MIN     (0)
+#define CFG_ENABLE_DYNAMIC_RA_START_RATE_MAX     (65535)
+#define CFG_ENABLE_DYNAMIC_RA_START_RATE_DEFAULT (0)
 
 /* Bit mask value to enable RTS/CTS for different modes
  * for 2.4 GHz, HT20 - 0x0001, for 2.4 GHz, HT40 - 0x0002
@@ -1542,6 +1563,16 @@ typedef enum
 #define CFG_DEFAULT_RATE_INDEX_24GH_MAX           ( 7 )
 #define CFG_DEFAULT_RATE_INDEX_24GH_DEFAULT       ( 1 )
 
+
+/*
+ * This INI item is used to control subsystem restart(SSR) test framework
+ * Set its value to 1 to enable APPS trigerred SSR testing
+ */
+#define CFG_ENABLE_CRASH_INJECT "gEnableForceTargetAssert"
+#define CFG_ENABLE_CRASH_INJECT_MIN (0)
+#define CFG_ENABLE_CRASH_INJECT_MAX (1)
+#define CFG_ENABLE_CRASH_INJECT_DEFAULT (0)
+
 static __inline tANI_U32 defHddRateToDefCfgRate( tANI_U32 defRateIndex )
 {
     switch(defRateIndex){
@@ -2533,6 +2564,16 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_OPTIMIZE_CA_EVENT_ENABLE     ( 1 )
 #define CFG_OPTIMIZE_CA_EVENT_DEFAULT    ( 0 )
 
+
+/*
+ * BOffsetCorrectionEnable : This ini will control enabling/disabling
+ * of rate dependent power offsets in firmware
+ */
+#define CFG_SAR_BOFFSET_SET_CORRECTION_NAME      "gBOffsetCorrectionEnable"
+#define CFG_SAR_BOFFSET_SET_CORRECTION_MIN       (0)
+#define CFG_SAR_BOFFSET_SET_CORRECTION_MAX       (1)
+#define CFG_SAR_BOFFSET_SET_CORRECTION_DEFAULT   (0)
+
 /*--------------------------------------------------------------------------- 
   Type declarations
   -------------------------------------------------------------------------*/ 
@@ -3046,6 +3087,8 @@ typedef struct
    v_U32_t                     linkFailTxCnt;
    v_BOOL_t                    ignorePeerHTopMode;
    v_U8_t                      gOptimizeCAevent;
+   v_BOOL_t                    crash_inject_enabled;
+   v_U8_t                      boffset_correction_enable;
 } hdd_config_t;
 
 /*--------------------------------------------------------------------------- 

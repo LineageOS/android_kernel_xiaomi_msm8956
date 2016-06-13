@@ -204,6 +204,7 @@ static placeHolderInCapBitmap supportEnabledFeatures[] =
    ,MGMT_FRAME_LOGGING             //53
    ,ENHANCED_TXBD_COMPLETION       //54
    ,LOGGING_ENHANCEMENT            //55
+   ,ANTENNA_DIVERSITY_SELECTION    //62
 };
 
 /*-------------------------------------------------------------------------- 
@@ -515,6 +516,7 @@ WDI_ReqProcFuncType  pfnReqProcTbl[WDI_MAX_UMAC_IND] =
   WDI_ProcessSetRtsCtsHtvhtInd,       /* WDI_SET_RTS_CTS_HTVHT_IND */
   WDI_ProcessFWLoggingDXEdoneInd,       /* WDI_FW_LOGGING_DXE_DONE_IND */
   WDI_ProcessEnableDisableCAEventInd,   /* WDI_SEND_FREQ_RANGE_CONTROL_IND */
+  WDI_ProcessGetCurrentAntennaIndex,          /* WDI_ANTENNA_DIVERSITY_SELECTION_REQ  */
 };
 
 
@@ -839,6 +841,7 @@ WDI_RspProcFuncType  pfnRspProcTbl[WDI_MAX_RESP] =
   WDI_delBaInd,                             /* WDI_HAL_DEL_BA_IND*/
   WDI_ProcessNanEvent,                      /* WDI_HAL_NAN_EVENT */
   WDI_Process_LostLinkParamInd,             /* WDI_HAL_LOST_LINK_PARAMS_IND*/
+  WDI_ProcessGetCurrentAntennaIndexRsp,     /* WDI_ANTENNA_DIVERSITY_SELECTION_RSP */
 };
 
 
@@ -1183,6 +1186,7 @@ static char *WDI_getReqMsgString(wpt_uint16 wdiReqMsgId)
     CASE_RETURN_STRING( WDI_MON_STOP_REQ );
     CASE_RETURN_STRING( WDI_FATAL_EVENT_LOGGING_REQ );
     CASE_RETURN_STRING( WDI_SEND_FREQ_RANGE_CONTROL_IND );
+    CASE_RETURN_STRING( WDI_ANTENNA_DIVERSITY_SELECTION_REQ );
     default:
         return "Unknown WDI MessageId";
   }
@@ -1319,6 +1323,7 @@ static char *WDI_getRespMsgString(wpt_uint16 wdiRespMsgId)
     CASE_RETURN_STRING( WDI_FW_LOGGING_INIT_RSP);
     CASE_RETURN_STRING( WDI_GET_FRAME_LOG_RSP);
     CASE_RETURN_STRING (WDI_FATAL_EVENT_LOGGING_RSP);
+    CASE_RETURN_STRING (WDI_ANTENNA_DIVERSITY_SELECTION_RSP);
     default:
         return "Unknown WDI MessageId";
   }
@@ -1484,8 +1489,12 @@ void WDI_TraceHostFWCapabilities(tANI_U32 *capabilityBitmap)
                      case LOGGING_ENHANCEMENT: snprintf(pCapStr, sizeof("LOGGING_ENHANCEMENT"), "%s", "LOGGING_ENHANCEMENT");
                           pCapStr += strlen("LOGGING_ENHANCEMENT");
                           break;
-
-
+                     case ANTENNA_DIVERSITY_SELECTION:
+                          snprintf(pCapStr,
+                          sizeof("ANTENNA_DIVERSITY_SELECTION"), "%s",
+                                 "ANTENNA_DIVERSITY_SELECTION");
+                          pCapStr += strlen("ANTENNA_DIVERSITY_SELECTION");
+                          break;
                  }
                  *pCapStr++ = ',';
                  *pCapStr++ = ' ';
@@ -24277,6 +24286,8 @@ WDI_2_HAL_REQ_TYPE
        return WLAN_HAL_FATAL_EVENT_LOGGING_REQ;
   case WDI_SEND_FREQ_RANGE_CONTROL_IND:
        return WLAN_HAL_SEND_FREQ_RANGE_CONTROL_IND;
+  case WDI_ANTENNA_DIVERSITY_SELECTION_REQ:
+       return WLAN_HAL_ANTENNA_DIVERSITY_SELECTION_REQ;
   default:
     return WLAN_HAL_MSG_MAX;
   }
@@ -24610,6 +24621,8 @@ case WLAN_HAL_DEL_STA_SELF_RSP:
        return WDI_MON_STOP_RSP;
   case WLAN_HAL_FATAL_EVENT_LOGGING_RSP:
        return WDI_FATAL_EVENT_LOGGING_RSP;
+  case WLAN_HAL_ANTENNA_DIVERSITY_SELECTION_RSP:
+       return WDI_ANTENNA_DIVERSITY_SELECTION_RSP;
   default:
     return eDRIVER_TYPE_MAX;
   }
@@ -35457,3 +35470,159 @@ WDI_EnableDisableCAEventInd
   return WDI_PostMainEvent(&gWDICb, WDI_REQUEST_EVENT, &wdiEventData);
 
 } /* WDI_EnableDisableCAEventInd */
+
+/**
+ @brief Process Current Antenna Index information from FW
+
+ @param  pWDICtx:         pointer to the WLAN DAL context
+         pEventData:      pointer to the event information structure
+
+ @see
+ @return Result of the function call
+*/
+WDI_Status
+WDI_ProcessGetCurrentAntennaIndexRsp
+(
+  WDI_ControlBlockType*  pWDICtx,
+  WDI_EventInfoType*     pEventData
+)
+{
+   WDI_AntennaDivSelRspCb wdiGetCurrentAntennaIndexRspCb;
+   tHalAntennaDiversitySelectionRspParams *pHalAntDivSelRsp;
+
+  /*-------------------------------------------------------------------------
+    Sanity check
+  -------------------------------------------------------------------------*/
+  if (( NULL == pWDICtx ) || ( NULL == pEventData ) ||
+      ( NULL == pEventData->pEventData))
+  {
+     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
+                 "%s: Invalid parameters", __func__);
+     WDI_ASSERT(0);
+     return WDI_STATUS_E_FAILURE;
+  }
+  pHalAntDivSelRsp =
+  (tHalAntennaDiversitySelectionRspParams*)pEventData->pEventData;
+  wdiGetCurrentAntennaIndexRspCb = (WDI_AntennaDivSelRspCb)pWDICtx->pfncRspCB;
+
+  if (pHalAntDivSelRsp->status != 0)
+  {
+      wdiGetCurrentAntennaIndexRspCb(WDI_STATUS_E_FAILURE,
+                      (void *)pHalAntDivSelRsp, pWDICtx->pRspCBUserData);
+  }
+  else
+  {
+      wdiGetCurrentAntennaIndexRspCb(WDI_STATUS_SUCCESS,
+                                     (void *)pHalAntDivSelRsp,
+                                     pWDICtx->pRspCBUserData);
+  }
+
+  return WDI_STATUS_SUCCESS;
+}
+
+/**
+ @brief Process Get Current Antenna Index request command
+
+ @param  pWDICtx:         pointer to the WLAN DAL context
+         pEventData:      pointer to the event information structure
+
+ @see
+ @return Result of the function call
+*/
+WDI_Status
+WDI_ProcessGetCurrentAntennaIndex
+(
+    WDI_ControlBlockType*  pWDICtx,
+    WDI_EventInfoType*     pEventData
+)
+{
+    wpt_uint8*  pSendBuffer = NULL;
+    wpt_uint16  usDataOffset = 0;
+    wpt_uint16  usSendSize = 0;
+    tHalAntennaDiversitySelectionReqParams halAntDivSelReq;
+    WDI_AntennaDivSelRspCb wdiGetCurrentAntennaIndexRspCb;
+
+    WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_INFO,
+               "%s", __func__);
+
+    /*-------------------------------------------------------------------------
+       Sanity check
+     -------------------------------------------------------------------------*/
+    if (( NULL == pEventData ) || ( NULL == pEventData->pEventData ) ||
+        ( NULL == pEventData->pCBfnc ))
+    {
+        WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
+                    "%s: Invalid parameters", __func__);
+        WDI_ASSERT(0);
+        return WDI_STATUS_E_FAILURE;
+    }
+    wdiGetCurrentAntennaIndexRspCb = (WDI_AntennaDivSelRspCb)pEventData->pCBfnc;
+
+    if (( WDI_STATUS_SUCCESS != WDI_GetMessageBuffer( pWDICtx,
+                                WDI_ANTENNA_DIVERSITY_SELECTION_REQ,
+                                sizeof(tHalAntennaDiversitySelectionReqParams),
+                                &pSendBuffer, &usDataOffset, &usSendSize))||
+       ( usSendSize < (usDataOffset +
+         sizeof(tHalAntennaDiversitySelectionReqParams) )))
+    {
+           WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
+                       "Unable to get send buffer in GetCurrentAntennaIndex %p",
+                       pEventData);
+        WDI_ASSERT(0);
+        return WDI_STATUS_E_FAILURE;
+    }
+    pWDICtx->wdiReqStatusCB = NULL;
+    pWDICtx->pReqStatusUserData = pEventData->pEventData;
+    halAntDivSelReq.reserved = *((wpt_uint32 *)(pEventData->pEventData));
+    wpalMemoryCopy( pSendBuffer+usDataOffset,
+                    &halAntDivSelReq,
+                    sizeof(tHalAntennaDiversitySelectionReqParams));
+
+   /*-------------------------------------------------------------------------
+     Send Get STA Request to HAL
+   -------------------------------------------------------------------------*/
+   return  WDI_SendMsg( pWDICtx, pSendBuffer, usSendSize,
+                        wdiGetCurrentAntennaIndexRspCb,
+                        pEventData->pUserData,
+                        WDI_ANTENNA_DIVERSITY_SELECTION_RSP);
+}
+
+/**
+ @brief WDI_GetCurrentAntennaIndex
+
+ @param pOemDataReqNewConfig: Req parameter for the FW
+
+ @return SUCCESS or FAIL
+*/
+WDI_Status
+WDI_GetCurrentAntennaIndex
+(
+  void *pUserData,
+  WDI_AntennaDivSelRspCb wdiAntennaDivSelRspCb,
+  wpt_uint32 reserved
+)
+{
+   WDI_EventInfoType      wdiEventData;
+
+  /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+  /*------------------------------------------------------------------------
+    Sanity Check
+  ------------------------------------------------------------------------*/
+  if ( eWLAN_PAL_FALSE == gWDIInitialized )
+  {
+      WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
+                 "WDI API call before module is initialized - Fail request");
+      return WDI_STATUS_E_NOT_ALLOWED;
+  }
+  /*------------------------------------------------------------------------
+    Fill in Event data and post to the Main FSM
+  ------------------------------------------------------------------------*/
+  wdiEventData.wdiRequest      = WDI_ANTENNA_DIVERSITY_SELECTION_REQ;
+  wdiEventData.pEventData      = (void *)&reserved;
+  wdiEventData.uEventDataSize  = sizeof(wpt_uint32);
+  wdiEventData.pCBfnc          = wdiAntennaDivSelRspCb;
+  wdiEventData.pUserData       = pUserData;
+
+  return WDI_PostMainEvent(&gWDICb, WDI_REQUEST_EVENT, &wdiEventData);
+}

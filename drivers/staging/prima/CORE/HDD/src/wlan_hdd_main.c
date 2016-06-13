@@ -3460,7 +3460,7 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
                                            pHddStaCtx->conn_info.bssId, sizeof(tSirMacAddr)))
            {
                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "%s:Reassoc BSSID is same as currently associated AP bssid",__func__);
-               ret = -EINVAL;
+               ret = 0;
                goto exit;
            }
 
@@ -3470,7 +3470,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            {
                hddLog(VOS_TRACE_LEVEL_ERROR,
                       "%s: Invalid Channel [%d]", __func__, channel);
-               return -EINVAL;
+
+               ret = -EINVAL;
+               goto exit;
            }
 
            /* Proceed with reassoc */
@@ -3706,22 +3708,14 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            if (VOS_TRUE == vos_mem_compare(targetApBssid,
                                            pHddStaCtx->conn_info.bssId, sizeof(tSirMacAddr)))
            {
-               /* Reassoc to same AP, only supported for Open Security*/
-               if ((pHddStaCtx->conn_info.ucEncryptionType ||
-                   pHddStaCtx->conn_info.mcEncryptionType))
-               {
-                   hddLog(LOGE,
-                      FL("Reassoc to same AP, only supported for Open Security"));
-                   ret = -ENOTSUPP;
-                   goto exit;
-               }
-               hddLog(LOG1,
-                     FL("11r Reassoc BSSID is same as currently associated AP bssid"));
+               VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                         "%s:11r Reassoc BSSID is same as currently associated AP bssid",
+                         __func__);
                sme_GetModifyProfileFields(hHal, pAdapter->sessionId,
                                        &modProfileFields);
                sme_RoamReassoc(hHal, pAdapter->sessionId,
                             NULL, modProfileFields, &roamId, 1);
-               goto exit;
+               return 0;
            }
 
            /* Check channel number is a valid channel number */
@@ -3730,8 +3724,7 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            {
                hddLog(VOS_TRACE_LEVEL_ERROR,
                       "%s: Invalid Channel  [%d]", __func__, channel);
-               ret = -EINVAL;
-               goto exit;
+               return -EINVAL;
            }
 
            trigger = eSME_ROAM_TRIGGER_SCAN;
@@ -4352,7 +4345,13 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            int set_value;
            /* Move pointer to ahead of TDLSOFFCH*/
            value += 26;
-           sscanf(value, "%d", &set_value);
+           if (!(sscanf(value, "%d", &set_value))) {
+               VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                               FL("No input identified"));
+               ret = -EINVAL;
+               goto exit;
+           }
+
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                      "%s: Tdls offchannel offset:%d",
                      __func__, set_value);
@@ -4368,7 +4367,13 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            int set_value;
            /* Move pointer to ahead of tdlsoffchnmode*/
            value += 18;
-           sscanf(value, "%d", &set_value);
+           ret = sscanf(value, "%d", &set_value);
+           if (ret != 1) {
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                           FL("No input identified"));
+               ret = -EINVAL;
+               goto exit;
+           }
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                      "%s: Tdls offchannel mode:%d",
                      __func__, set_value);
@@ -4383,7 +4388,14 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            int set_value;
            /* Move pointer to ahead of TDLSOFFCH*/
            value += 14;
-           sscanf(value, "%d", &set_value);
+           ret = sscanf(value, "%d", &set_value);
+           if (ret != 1) {
+               VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                     "Wrong value is given for hdd_set_tdls_offchannel");
+               ret = -EINVAL;
+               goto exit;
+           }
+
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                      "%s: Tdls offchannel num: %d",
                      __func__, set_value);
@@ -4698,17 +4710,18 @@ static VOS_STATUS hdd_parse_ese_beacon_req(tANI_U8 *pValue,
     /*no argument followed by spaces*/
     if ('\0' == *inPtr) return -EINVAL;
 
-    /*getting the first argument ie measurement token*/
+    /*getting the first argument ie Number of IE fields */
     v = sscanf(inPtr, "%31s ", buf);
     if (1 != v) return -EINVAL;
 
     v = kstrtos32(buf, 10, &tempInt);
     if ( v < 0) return -EINVAL;
 
+    tempInt = VOS_MIN(tempInt, SIR_ESE_MAX_MEAS_IE_REQS);
     pEseBcnReq->numBcnReqIe = tempInt;
 
-    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-               "Number of Bcn Req Ie fields(%d)", pEseBcnReq->numBcnReqIe);
+    hddLog(LOG1, "Number of Bcn Req Ie fields: %d", pEseBcnReq->numBcnReqIe);
+
 
     for (j = 0; j < (pEseBcnReq->numBcnReqIe); j++)
     {
@@ -8242,6 +8255,14 @@ static void __hdd_set_multicast_list(struct net_device *dev)
       }
    }
 
+   if (pHddCtx->hdd_wlan_suspended)
+   {
+       /*
+        * Configure the Mcast address list to FW
+        * If wlan is already in suspend mode
+        */
+       wlan_hdd_set_mc_addr_list(pAdapter, TRUE);
+   }
    EXIT();
    return;
 }
@@ -8472,11 +8493,11 @@ void wlan_hdd_mon_close(hdd_context_t *pHddCtx)
 {
     VOS_STATUS vosStatus;
     v_CONTEXT_t pVosContext = pHddCtx->pvosContext;
-    struct wiphy *wiphy = pHddCtx->wiphy;
     long ret;
     hdd_mon_ctx_t *pMonCtx = NULL;
     v_U32_t magic;
     struct completion cmpVar;
+
     hdd_adapter_t *pAdapter = hdd_get_adapter(pHddCtx,WLAN_HDD_MONITOR);
     if(pAdapter == NULL || pVosContext == NULL)
     {
@@ -8533,15 +8554,26 @@ void wlan_hdd_mon_close(hdd_context_t *pHddCtx)
        nl_srv_exit();
    #endif
 
-   if (pHddCtx->cfg_ini)
-   {
-       kfree(pHddCtx->cfg_ini);
-       pHddCtx->cfg_ini= NULL;
-   }
    hdd_close_all_adapters( pHddCtx );
-
-   wiphy_free(wiphy) ;
-
+}
+/**
+ * hdd_wlan_free_wiphy_channels - free Channel pointer for wiphy
+ * @ wiphy: the wiphy to validate against
+ *
+ * Return: void
+ */
+void hdd_wlan_free_wiphy_channels(struct wiphy *wiphy)
+{
+    int i =0;
+    for (i = 0; i < IEEE80211_NUM_BANDS; i++)
+    {
+        if (NULL != wiphy->bands[i] &&
+                (NULL != wiphy->bands[i]->channels))
+        {
+            vos_mem_free(wiphy->bands[i]->channels);
+            wiphy->bands[i]->channels = NULL;
+        }
+    }
 }
 /**---------------------------------------------------------------------------
 
@@ -8572,7 +8604,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    {
       hddLog(VOS_TRACE_LEVEL_ERROR,"%s: MONITOR MODE",__func__);
       wlan_hdd_mon_close(pHddCtx);
-      return;
+      goto free_hdd_ctx;
    }
    else if (VOS_FTM_MODE != hdd_get_conparam())
    {
@@ -8878,11 +8910,13 @@ free_hdd_ctx:
        pHddCtx->cfg_ini= NULL;
    }
 
-   /* FTM mode, WIPHY did not registered
+   /* FTM/MONITOR mode, WIPHY did not registered
       If un-register here, system crash will happen */
-   if (VOS_FTM_MODE != hdd_get_conparam())
+   if (!(VOS_FTM_MODE == hdd_get_conparam() ||
+            VOS_MONITOR_MODE == hdd_get_conparam()))
    {
       wiphy_unregister(wiphy) ;
+      hdd_wlan_free_wiphy_channels(wiphy);
    }
    wiphy_free(wiphy) ;
    if (hdd_is_ssr_required())
@@ -10409,6 +10443,8 @@ err_close_adapter:
 err_unregister_wiphy:
 #endif
    wiphy_unregister(wiphy) ;
+   hdd_wlan_free_wiphy_channels(wiphy);
+
 err_vosstop:
    vos_stop(pVosContext);
 

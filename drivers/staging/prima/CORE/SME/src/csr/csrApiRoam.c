@@ -2523,72 +2523,117 @@ eHalStatus csrInitChannelPowerList( tpAniSirGlobal pMac, tCsr11dinfo *ps11dinfo)
   return eHAL_STATUS_SUCCESS;
 }
 
-//pCommand may be NULL
-//Pass in sessionId in case pCommand is NULL. sessionId is not used in case pCommand is not NULL.
-void csrRoamRemoveDuplicateCommand(tpAniSirGlobal pMac, tANI_U32 sessionId, tSmeCmd *pCommand, eCsrRoamReason eRoamReason)
+/**
+ * csr_roam_remove_duplicate_cmd_from_list()- Remove duplicate roam cmd from
+ * list
+ *
+ * @pMac: pointer to global mac
+ * @sessionId: session id for the cmd
+ * @pList: pending list from which cmd needs to be removed
+ * @pCommand: cmd to be removed, can be NULL
+ * @eRoamReason: cmd with reason to be removed
+ *
+ * Remove duplicate command from the pending list.
+ *
+ * Return: void
+ */
+void csr_roam_remove_duplicate_cmd_from_list(tpAniSirGlobal pMac,
+            tANI_U32 sessionId, tDblLinkList *pList,
+            tSmeCmd *pCommand, eCsrRoamReason eRoamReason)
 {
     tListElem *pEntry, *pNextEntry;
     tSmeCmd *pDupCommand;
     tDblLinkList localList;
 
     vos_mem_zero(&localList, sizeof(tDblLinkList));
-    if(!HAL_STATUS_SUCCESS(csrLLOpen(pMac->hHdd, &localList)))
+    if (!HAL_STATUS_SUCCESS(csrLLOpen(pMac->hHdd, &localList)))
     {
-        smsLog(pMac, LOGE, FL(" failed to open list"));
+        smsLog(pMac, LOGE, FL("failed to open list"));
         return;
     }
-    csrLLLock( &pMac->sme.smeCmdPendingList );
-    pEntry = csrLLPeekHead( &pMac->sme.smeCmdPendingList, LL_ACCESS_NOLOCK );
-    while( pEntry )
+    csrLLLock(pList);
+    pEntry = csrLLPeekHead(pList, LL_ACCESS_NOLOCK);
+    while (pEntry)
     {
-        pNextEntry = csrLLNext( &pMac->sme.smeCmdPendingList, pEntry, LL_ACCESS_NOLOCK );
-        pDupCommand = GET_BASE_ADDR( pEntry, tSmeCmd, Link );
-        // Remove the previous command if..
-        // - the new roam command is for the same RoamReason...
-        // - the new roam command is a NewProfileList.
-        // - the new roam command is a Forced Dissoc
-        // - the new roam command is from an 802.11 OID (OID_SSID or OID_BSSID).
-        if ( 
-            (pCommand && ( pCommand->sessionId == pDupCommand->sessionId ) &&
-                ((pCommand->command == pDupCommand->command) &&
-                /* This peermac check is requried for Softap/GO scenarios
-                 * For STA scenario below OR check will suffice as pCommand will 
-                 * always be NULL for STA scenarios
-                 */
-                (vos_mem_compare(pDupCommand->u.roamCmd.peerMac, pCommand->u.roamCmd.peerMac, sizeof(v_MACADDR_t))) &&
-                 (pCommand->u.roamCmd.roamReason == pDupCommand->u.roamCmd.roamReason ||
-                    eCsrForcedDisassoc == pCommand->u.roamCmd.roamReason ||
-                    eCsrHddIssued == pCommand->u.roamCmd.roamReason))) 
-                ||
-            //below the pCommand is NULL
-            ( (sessionId == pDupCommand->sessionId) &&
-              (eSmeCommandRoam == pDupCommand->command) &&
-                 ((eCsrForcedDisassoc == eRoamReason) ||
-                    (eCsrHddIssued == eRoamReason))
-               )
-           )
+        pNextEntry = csrLLNext(pList, pEntry, LL_ACCESS_NOLOCK);
+        pDupCommand = GET_BASE_ADDR(pEntry, tSmeCmd, Link);
+        /*
+         * Remove the previous command if..
+         * - the new roam command is for the same RoamReason...
+         * - the new roam command is a NewProfileList.
+         * - the new roam command is a Forced Dissoc
+         * - the new roam command is from an 802.11 OID
+         *   (OID_SSID or OID_BSSID).
+         */
+        if ((pCommand && (pCommand->sessionId == pDupCommand->sessionId) &&
+              ((pCommand->command == pDupCommand->command) &&
+              /*
+               * This peermac check is requried for Softap/GO scenarios
+               * For STA scenario below OR check will suffice as pCommand
+               * will always be NULL for STA scenarios
+               */
+               (vos_mem_compare(pDupCommand->u.roamCmd.peerMac,
+                  pCommand->u.roamCmd.peerMac, sizeof(v_MACADDR_t))) &&
+                ((pCommand->u.roamCmd.roamReason ==
+                          pDupCommand->u.roamCmd.roamReason) ||
+                 (eCsrForcedDisassoc == pCommand->u.roamCmd.roamReason) ||
+                 (eCsrHddIssued == pCommand->u.roamCmd.roamReason)))) ||
+            /* OR if pCommand is NULL */
+            ((sessionId == pDupCommand->sessionId) &&
+             (eSmeCommandRoam == pDupCommand->command) &&
+             ((eCsrForcedDisassoc == eRoamReason) ||
+              (eCsrHddIssued == eRoamReason))))
         {
-            smsLog(pMac, LOGW, FL("   roamReason = %d"), pDupCommand->u.roamCmd.roamReason);
-            // Remove the 'stale' roam command from the pending list...
-            if(csrLLRemoveEntry( &pMac->sme.smeCmdPendingList, pEntry, LL_ACCESS_NOLOCK ))
-            {
+            smsLog(pMac, LOGW, FL("RoamReason = %d"),
+                           pDupCommand->u.roamCmd.roamReason);
+            /* Remove the 'stale' roam command from the pending list */
+            if (csrLLRemoveEntry(pList, pEntry, LL_ACCESS_NOLOCK))
                 csrLLInsertTail(&localList, pEntry, LL_ACCESS_NOLOCK);
-            }
         }
         pEntry = pNextEntry;
     }
-    csrLLUnlock( &pMac->sme.smeCmdPendingList );
+    csrLLUnlock(pList);
 
-    while( (pEntry = csrLLRemoveHead(&localList, LL_ACCESS_NOLOCK)) )
+    while ((pEntry = csrLLRemoveHead(&localList, LL_ACCESS_NOLOCK)))
     {
         pDupCommand = GET_BASE_ADDR( pEntry, tSmeCmd, Link );
-        //Tell caller that the command is cancelled
-        csrRoamCallCallback(pMac, pDupCommand->sessionId, NULL, pDupCommand->u.roamCmd.roamId,
-                                            eCSR_ROAM_CANCELLED, eCSR_ROAM_RESULT_NONE);
+        /* Tell caller that the command is cancelled */
+        csrRoamCallCallback(pMac, pDupCommand->sessionId, NULL,
+                    pDupCommand->u.roamCmd.roamId,
+                    eCSR_ROAM_CANCELLED, eCSR_ROAM_RESULT_NONE);
         csrReleaseCommandRoam(pMac, pDupCommand);
     }
     csrLLClose(&localList);
 }
+
+/**
+ * csrRoamRemoveDuplicateCommand()- Remove duplicate roam cmd
+ * from pending lists.
+ *
+ * @pMac: pointer to global mac
+ * @sessionId: session id for the cmd
+ * @pCommand: cmd to be removed, can be null
+ * @eRoamReason: cmd with reason to be removed
+ *
+ * Remove duplicate command from the sme and roam pending list.
+ *
+ * Return: void
+ */
+void csrRoamRemoveDuplicateCommand(tpAniSirGlobal pMac,
+                 tANI_U32 sessionId, tSmeCmd *pCommand,
+                 eCsrRoamReason eRoamReason)
+{
+    /* Always lock active list before locking pending lists */
+    csrLLLock(&pMac->sme.smeCmdActiveList);
+    csr_roam_remove_duplicate_cmd_from_list(pMac,
+       sessionId, &pMac->sme.smeCmdPendingList,
+       pCommand, eRoamReason);
+    csr_roam_remove_duplicate_cmd_from_list(pMac,
+       sessionId, &pMac->roam.roamCmdPendingList,
+       pCommand, eRoamReason);
+    csrLLUnlock(&pMac->sme.smeCmdActiveList);
+}
+
 eHalStatus csrRoamCallCallback(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamInfo *pRoamInfo, 
                                tANI_U32 roamId, eRoamCmdStatus u1, eCsrRoamResult u2)
 {
@@ -6740,6 +6785,11 @@ eHalStatus csrRoamConnect(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
         smsLog(pMac, LOGP, FL("No profile specified"));
         return eHAL_STATUS_FAILURE;
     }
+    if(!pSession)
+    {
+        smsLog(pMac, LOGE, FL(" session %d not found "), sessionId);
+        return eHAL_STATUS_FAILURE;
+    }
     smsLog(pMac, LOG1, FL("called  BSSType = %s (%d) authtype = %d "
                                                     "encryType = %d"),
                 lim_BssTypetoString(pProfile->BSSType),
@@ -6753,6 +6803,8 @@ eHalStatus csrRoamConnect(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
                pProfile->operationChannel);
         return status;
     }
+    /* Reset abortConnection for the fresh connection */
+    pSession->abortConnection = FALSE;
     csrRoamCancelRoaming(pMac, sessionId);
     csrScanRemoveFreshScanCommand(pMac, sessionId);
     csrScanCancelIdleScan(pMac);
@@ -7256,7 +7308,7 @@ eHalStatus csrRoamIssueDisassociateCmd( tpAniSirGlobal pMac, tANI_U32 sessionId,
 {
     eHalStatus status = eHAL_STATUS_SUCCESS;
     tSmeCmd *pCommand;
-        tANI_BOOLEAN fHighPriority = eANI_BOOLEAN_FALSE;
+
     do
     {
         pCommand = csrGetCommandBuffer( pMac );
@@ -7285,7 +7337,6 @@ eHalStatus csrRoamIssueDisassociateCmd( tpAniSirGlobal pMac, tANI_U32 sessionId,
             pCommand->u.roamCmd.roamReason = eCsrForcedDeauth;
             break;
         case eCSR_DISCONNECT_REASON_HANDOFF:
-            fHighPriority = eANI_BOOLEAN_TRUE;
             pCommand->u.roamCmd.roamReason = eCsrSmeIssuedDisassocForHandoff;
             break;
         case eCSR_DISCONNECT_REASON_UNSPECIFIED:
@@ -7301,7 +7352,7 @@ eHalStatus csrRoamIssueDisassociateCmd( tpAniSirGlobal pMac, tANI_U32 sessionId,
         default:
             break;
         }
-        status = csrQueueSmeCommand(pMac, pCommand, fHighPriority);
+        status = csrQueueSmeCommand(pMac, pCommand, eANI_BOOLEAN_TRUE);
         if( !HAL_STATUS_SUCCESS( status ) )
         {
             smsLog( pMac, LOGE, FL(" fail to send message status = %d"), status );
@@ -16420,7 +16471,7 @@ eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 command, tANI_U8 reas
    tCsrRoamSession *pSession;
    tANI_U8 i,j,num_channels = 0, ucDot11Mode;
    tANI_U8 *ChannelList = NULL;
-   tANI_U32 sessionId;
+   tANI_U32 sessionId = 0;
    eHalStatus status = eHAL_STATUS_SUCCESS;
    tpCsrChannelInfo    currChannelListInfo;
    tANI_U32 host_channels = 0;
@@ -16475,12 +16526,11 @@ eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 command, tANI_U8 reas
     * the roam scan. So no need to find the session if command is
     * ROAM_SCAN_OFFLOAD_STOP.
     */
+   status = csrRoamGetSessionIdFromBSSID(pMac,
+                         (tCsrBssid *)pNeighborRoamInfo->currAPbssid,
+                                     &sessionId);
    if( ROAM_SCAN_OFFLOAD_STOP != command )
    {
-      status = csrRoamGetSessionIdFromBSSID(pMac,
-                            (tCsrBssid *)pNeighborRoamInfo->currAPbssid,
-                                        &sessionId);
-
       if ( !HAL_STATUS_SUCCESS( status ) )
       {
           VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
