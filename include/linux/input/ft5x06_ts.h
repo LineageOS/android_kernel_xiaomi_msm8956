@@ -59,6 +59,8 @@ struct ft5x06_ts_platform_data {
 	u32 irq_gpio_flags;
 	u32 reset_gpio;
 	u32 reset_gpio_flags;
+	u32 power_ldo_gpio;
+	u32 power_ldo_gpio_flags;
 	u32 family_id;
 	u32 x_max;
 	u32 y_max;

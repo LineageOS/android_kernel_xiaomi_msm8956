@@ -36,6 +36,7 @@
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
+#include <linux/mutex.h>
 
 
 #if defined(CONFIG_FB)
@@ -146,12 +147,13 @@
 #define FT5306I_ID		0x55
 #define FT6X06_ID		0x06
 #define FT6X36_ID		0x36
+#define FT5X46_ID		0x54
 
 #define FT_UPGRADE_AA		0xAA
 #define FT_UPGRADE_55		0x55
 
 #define FT_FW_MIN_SIZE		8
-#define FT_FW_MAX_SIZE		32768
+#define FT_FW_MAX_SIZE		65536
 
 /* Firmware file is not supporting minor and sub minor so use 0 */
 #define FT_FW_FILE_MAJ_VER(x)	((x)->data[(x)->size - 2])
@@ -191,7 +193,7 @@
 #define FT_EARSE_DLY_MS		100
 #define FT_55_AA_DLY_NS		5000
 
-#define FT_UPGRADE_LOOP		30
+#define FT_UPGRADE_LOOP		5
 #define FT_CAL_START		0x04
 #define FT_CAL_FIN		0x00
 #define FT_CAL_STORE		0x05
@@ -279,6 +281,8 @@ struct ft5x06_ts_data {
 	struct pinctrl_state *pinctrl_state_release;
 };
 
+static DEFINE_MUTEX(i2c_rw_access);
+
 static int ft5x06_ts_start(struct device *dev);
 static int ft5x06_ts_stop(struct device *dev);
 
@@ -315,6 +319,8 @@ static int ft5x06_i2c_read(struct i2c_client *client, char *writebuf,
 {
 	int ret;
 
+	mutex_lock(&i2c_rw_access);
+
 	if (writelen > 0) {
 		struct i2c_msg msgs[] = {
 			{
@@ -347,6 +353,7 @@ static int ft5x06_i2c_read(struct i2c_client *client, char *writebuf,
 		if (ret < 0)
 			dev_err(&client->dev, "%s:i2c read error.\n", __func__);
 	}
+	mutex_unlock(&i2c_rw_access);
 	return ret;
 }
 
@@ -363,9 +370,11 @@ static int ft5x06_i2c_write(struct i2c_client *client, char *writebuf,
 			 .buf = writebuf,
 		 },
 	};
+	mutex_lock(&i2c_rw_access);
 	ret = i2c_transfer(client->adapter, msgs, 1);
 	if (ret < 0)
 		dev_err(&client->dev, "%s: i2c write error.\n", __func__);
+	mutex_unlock(&i2c_rw_access);
 
 	return ret;
 }
@@ -872,6 +881,9 @@ static int ft5x06_power_on(struct ft5x06_ts_data *data, bool on)
 	if (!on)
 		goto power_off;
 
+	if (gpio_is_valid(data->pdata->power_ldo_gpio))
+		gpio_set_value(data->pdata->power_ldo_gpio, 1);
+
 	rc = regulator_enable(data->vdd);
 	if (rc) {
 		dev_err(&data->client->dev,
@@ -889,6 +901,9 @@ static int ft5x06_power_on(struct ft5x06_ts_data *data, bool on)
 	return rc;
 
 power_off:
+	if (gpio_is_valid(data->pdata->power_ldo_gpio))
+		gpio_set_value(data->pdata->power_ldo_gpio, 0);
+
 	rc = regulator_disable(data->vdd);
 	if (rc) {
 		dev_err(&data->client->dev,
@@ -916,6 +931,21 @@ static int ft5x06_power_init(struct ft5x06_ts_data *data, bool on)
 
 	if (!on)
 		goto pwr_deinit;
+
+	if (gpio_is_valid(data->pdata->power_ldo_gpio)) {
+		printk("%s, power_ldo_gpio\n", __func__);
+		rc = gpio_request(data->pdata->power_ldo_gpio, "focaltech_ldo_gpio");
+		if (rc) {
+			printk("irq gpio request failed\n");
+			goto err_gpio_request;
+		}
+
+		rc = gpio_direction_output(data->pdata->power_ldo_gpio, 1);
+		if (rc) {
+			printk("set_direction for irq gpio failed\n");
+			goto free_ldo_gpio;
+		}
+	}
 
 	data->vdd = regulator_get(&data->client->dev, "vdd");
 	if (IS_ERR(data->vdd)) {
@@ -961,10 +991,17 @@ reg_vdd_set_vtg:
 	if (regulator_count_voltages(data->vdd) > 0)
 		regulator_set_voltage(data->vdd, 0, FT_VTG_MAX_UV);
 reg_vdd_put:
+free_ldo_gpio:
+	if (gpio_is_valid(data->pdata->power_ldo_gpio))
+		gpio_free(data->pdata->power_ldo_gpio);
 	regulator_put(data->vdd);
+err_gpio_request:
 	return rc;
 
 pwr_deinit:
+	if (gpio_is_valid(data->pdata->power_ldo_gpio))
+		gpio_free(data->pdata->power_ldo_gpio);
+
 	if (regulator_count_voltages(data->vdd) > 0)
 		regulator_set_voltage(data->vdd, 0, FT_VTG_MAX_UV);
 
@@ -1393,6 +1430,238 @@ static int ft5x06_auto_cal(struct i2c_client *client)
 	return 0;
 }
 
+int hid_to_i2c(struct i2c_client *client)
+{
+	u8 auc_i2c_write_buf[5] = {0};
+	int bRet = 0;
+
+	auc_i2c_write_buf[0] = 0xeb;
+	auc_i2c_write_buf[1] = 0xaa;
+	auc_i2c_write_buf[2] = 0x09;
+
+	ft5x06_i2c_write(client, auc_i2c_write_buf, 3);
+
+	msleep(10);
+
+	auc_i2c_write_buf[0] = auc_i2c_write_buf[1] = auc_i2c_write_buf[2] = 0;
+
+	ft5x06_i2c_read(client, auc_i2c_write_buf, 0, auc_i2c_write_buf, 3);
+	printk("%s, auc_i2c_write_buf=0x%x, 0x%x, 0x%x\n", __func__, 
+		auc_i2c_write_buf[0], auc_i2c_write_buf[1], auc_i2c_write_buf[2]);
+	if (0xeb == auc_i2c_write_buf[0] && 0xaa == auc_i2c_write_buf[1] && 0x08 == auc_i2c_write_buf[2])
+		bRet = 1;
+	else
+		bRet = 0;
+
+	return bRet;
+}
+
+static int ft5x46_fw_upgrade_start(struct i2c_client *client,
+			const u8 *data, u32 data_len)
+{
+	struct ft5x06_ts_data *ts_data = i2c_get_clientdata(client);
+	struct fw_upgrade_info info = ts_data->pdata->info;
+	u8 w_buf[FT_MAX_WR_BUF] = {0}, r_buf[FT_MAX_RD_BUF] = {0};
+	u8 pkt_buf[FT_FW_PKT_LEN + FT_FW_PKT_META_LEN];
+	int i, j, temp;
+	u32 pkt_num, pkt_len;
+	u8 fw_ecc;
+	int i_ret;
+
+	printk("%s\n", __func__);
+	i_ret = hid_to_i2c(client);
+
+	if (i_ret == 0)
+		printk("[FTS] hid1 change to i2c fail ! \n");
+
+	for (i = 0, j = 0; i < FT_UPGRADE_LOOP; i++) {
+		msleep(FT_EARSE_DLY_MS);
+
+		/*********Step 1:Reset  CTPM *****/
+		/*write 0xaa to register 0xfc */
+		ft5x0x_write_reg(client, 0xfc, FT_UPGRADE_AA);
+		msleep(2);
+		ft5x0x_write_reg(client, 0xfc, FT_UPGRADE_55);
+
+		msleep(200);
+
+		i_ret = hid_to_i2c(client);
+
+		if (i_ret == 0)
+			printk("[FTS] hid%d change to i2c fail ! \n", i);
+		msleep(10);
+
+		/*********Step 2:Enter upgrade mode *****/
+		w_buf[0] = FT_UPGRADE_55;
+		w_buf[1] = FT_UPGRADE_AA;
+		i_ret = ft5x06_i2c_write(client, w_buf, 2);
+
+		if (i_ret < 0) {
+			printk("[FTS] failed writing  0x55 and 0xaa ! \n");
+			continue;
+		}
+
+		/*********Step 3:check READ-ID***********************/
+		msleep(1);
+		w_buf[0] = FT_READ_ID_REG;
+		w_buf[1] = 0x00;
+		w_buf[2] = 0x00;
+		w_buf[3] = 0x00;
+
+		r_buf[0] = r_buf[1] = 0x00;
+
+		ft5x06_i2c_read(client, w_buf, 4, r_buf, 2);
+
+		if (r_buf[0] == 0x54 && r_buf[1] == 0x2c) {
+			printk("Upgrade ID mismatch(%d), IC=0x%x 0x%x, info=0x%x 0x%x\n",
+				i, r_buf[0], r_buf[1], info.upgrade_id_1, info.upgrade_id_2);
+			break;
+		} else {
+			printk("[FTS] Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x\n",
+				r_buf[0], r_buf[1]);
+			continue;
+		}
+	}
+
+	if (i >= FT_UPGRADE_LOOP) {
+		dev_err(&client->dev, "Abort upgrade\n");
+		return -EIO;
+	}
+
+	/******Step 4:erase app and panel paramenter area******/
+	printk("Step 4:erase app and panel paramenter area\n");
+	w_buf[0] = 0x61;
+	ft5x06_i2c_write(client, w_buf, 1);
+	msleep(1350);
+
+	for (i = 0; i < 15; i++) {
+		w_buf[0] = 0x6a;
+		r_buf[0] = r_buf[1] = 0x00;
+		ft5x06_i2c_read(client, w_buf, 1, r_buf, 2);
+
+		if (0xF0 == r_buf[0] && 0xAA == r_buf[1])
+			break;
+		msleep(50);
+
+	}
+
+	w_buf[0] = 0xB0;
+	w_buf[1] = (u8) ((data_len >> 16) & 0xFF);
+	w_buf[2] = (u8) ((data_len >> 8) & 0xFF);
+	w_buf[3] = (u8) (data_len & 0xFF);
+
+	ft5x06_i2c_write(client, w_buf, 4);
+
+	/*********Step 5:write firmware(FW) to ctpm flash*********/
+	fw_ecc = 0;
+	printk("Step 5:write firmware(FW) to ctpm flash\n");
+	temp = 0;
+	pkt_num = (data_len) / FT_FW_PKT_LEN;
+	pkt_buf[0] = 0xbf;
+	pkt_buf[1] = 0x00;
+
+	for (j = 0; j < pkt_num; j++) {
+		temp = j * FT_FW_PKT_LEN;
+		pkt_buf[2] = (u8) (temp >> 8);
+		pkt_buf[3] = (u8) temp;
+		pkt_len = FT_FW_PKT_LEN;
+		pkt_buf[4] = (u8) (pkt_len >> 8);
+		pkt_buf[5] = (u8) pkt_len;
+
+		for (i = 0; i < FT_FW_PKT_LEN; i++) {
+			pkt_buf[6 + i] = data[j * FT_FW_PKT_LEN + i];
+			fw_ecc ^= pkt_buf[6 + i];
+		}
+		ft5x06_i2c_write(client, pkt_buf, FT_FW_PKT_LEN + 6);
+
+		for (i = 0; i < 30; i++) {
+			w_buf[0] = 0x6a;
+			r_buf[0] = r_buf[1] = 0x00;
+			ft5x06_i2c_read(client, w_buf, 1, r_buf, 2);
+
+			if ((j + 0x1000) == (((r_buf[0]) << 8) | r_buf[1]))
+				break;
+			msleep(1);
+
+		}
+	}
+
+	if ((data_len) % FT_FW_PKT_LEN > 0) {
+		temp = pkt_num * FT_FW_PKT_LEN;
+		pkt_buf[2] = (u8) (temp >> 8);
+		pkt_buf[3] = (u8) temp;
+		temp = (data_len) % FT_FW_PKT_LEN;
+		pkt_buf[4] = (u8) (temp >> 8);
+		pkt_buf[5] = (u8) temp;
+
+		for (i = 0; i < temp; i++) {
+			pkt_buf[6 + i] = data[pkt_num * FT_FW_PKT_LEN + i];
+			fw_ecc ^= pkt_buf[6 + i];
+		}
+		ft5x06_i2c_write(client, pkt_buf, temp + 6);
+
+		for (i = 0; i < 30; i++) {
+			w_buf[0] = 0x6a;
+			r_buf[0] = r_buf[1] = 0x00;
+			ft5x06_i2c_read(client, w_buf, 1, r_buf, 2);
+
+			if ((j + 0x1000) == (((r_buf[0]) << 8) | r_buf[1]))
+				break;
+			msleep(1);
+
+		}
+	}
+
+	msleep(50);
+
+/*********Step 6: read out checksum***********************/
+	/*send the opration head */
+	printk("Step 6: read out checksum\n");
+	w_buf[0] = 0x64;
+	ft5x06_i2c_write(client, w_buf, 1);
+	msleep(300);
+
+	temp = 0;
+	w_buf[0] = 0x65;
+	w_buf[1] = (u8)(temp >> 16);
+	w_buf[2] = (u8)(temp >> 8);
+	w_buf[3] = (u8)(temp);
+	temp = data_len;
+	w_buf[4] = (u8)(temp >> 8);
+	w_buf[5] = (u8)(temp);
+	i_ret = ft5x06_i2c_write(client, w_buf, 6);
+	msleep(data_len/256);
+
+	for (i = 0; i < 100; i++) {
+		w_buf[0] = 0x6a;
+		r_buf[0] = r_buf[1] = 0x00;
+		ft5x06_i2c_read(client, w_buf, 1, r_buf, 2);
+
+		if (0xF0 == r_buf[0] && 0x55 == r_buf[1])
+			break;
+		msleep(1);
+
+	}
+	w_buf[0] = 0x66;
+	ft5x06_i2c_read(client, w_buf, 1, r_buf, 1);
+	if (r_buf[0] != fw_ecc) {
+		dev_err(&client->dev, "[FTS]--ecc error! FW=%02x bt_ecc=%02x\n",
+					r_buf[0],
+					fw_ecc);
+
+		return -EIO;
+	}
+	printk(KERN_WARNING "checksum %X %X \n", r_buf[0], fw_ecc);
+
+	/*********Step 7: reset the new FW***********************/
+	printk("Step 7: reset the new FW\n");
+	w_buf[0] = 0x07;
+	ft5x06_i2c_write(client, w_buf, 1);
+	msleep(130);
+
+	return 0;
+}
+
 static int ft5x06_fw_upgrade_start(struct i2c_client *client,
 			const u8 *data, u32 data_len)
 {
@@ -1655,7 +1924,13 @@ static int ft5x06_fw_upgrade(struct device *dev, bool force)
 	}
 
 	/* start firmware upgrade */
-	if (FT_FW_CHECK(fw, data)) {
+	if (data->family_id == FT5X46_ID) {
+		rc = ft5x46_fw_upgrade_start(data->client, fw->data, fw->size);
+		if (rc < 0)
+			dev_err(dev, "update failed (%d). try later...\n", rc);
+		else if (data->pdata->info.auto_cal)
+			ft5x06_auto_cal(data->client);
+	} else if (FT_FW_CHECK(fw, data)) {
 		rc = ft5x06_fw_upgrade_start(data->client, fw->data, fw->size);
 		if (rc < 0)
 			dev_err(dev, "update failed (%d). try later...\n", rc);
@@ -2006,6 +2281,11 @@ static int ft5x06_parse_dt(struct device *dev,
 				0, &pdata->irq_gpio_flags);
 	if (pdata->irq_gpio < 0)
 		return pdata->irq_gpio;
+
+	pdata->power_ldo_gpio = of_get_named_gpio_flags(np, "focaltech,power-gpio",
+				0, &pdata->power_ldo_gpio_flags);
+	if (pdata->power_ldo_gpio < 0)
+		return pdata->power_ldo_gpio;
 
 	pdata->fw_name = "ft_fw.bin";
 	rc = of_property_read_string(np, "focaltech,fw-name", &pdata->fw_name);
