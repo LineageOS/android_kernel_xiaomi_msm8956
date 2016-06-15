@@ -62,7 +62,7 @@
 			linux,reserve-contiguous-region;
 			linux,reserve-region;
 			linux,remove-completely;
-			reg = <0x0 0x85E00000 0x0 0x0A00000>;
+			reg = <0x0 0x86300000 0x0 0x0500000>;
 			label = "other_ext_mem";
 		};
 
@@ -117,6 +117,14 @@
 			linux,reserve-contiguous-region;
 			reg = <0x0 0x0 0x0 0x400000>;
 			label = "adsp_mem";
+		};
+
+		tzapp_mem: tzapp_region@0 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0 0x8DD00000 0 0x1900000>;
+			label = "tzapp_mem";
 		};
 	};
 };
@@ -1587,9 +1595,9 @@
 		qcom,ce-opp-freq = <100000000>;
 	};
 
-	qcom_seecom: qseecom@85e00000 {
+	qcom_seecom: qseecom@8dd00000 {
 		compatible = "qcom,qseecom";
-		reg = <0x85e00000 0x500000>;
+		reg = <0x8dd00000 0x1900000>;
 		reg-names = "secapp-region";
 		qcom,hlos-num-ce-hw-instances = <1>;
 		qcom,hlos-ce-hw-instance = <0>;
@@ -2250,42 +2258,24 @@
 			"AIF4 VI", "MCLK",
 			"RX_BIAS", "MCLK",
 			"MADINPUT", "MCLK",
+			"AMIC1", "MIC BIAS1",
+			"MIC BIAS1", "Handset Mic",
 			"AMIC2", "MIC BIAS2",
 			"MIC BIAS2", "Headset Mic",
-			"AMIC3", "MIC BIAS2",
-			"MIC BIAS2", "ANCRight Headset Mic",
-			"AMIC4", "MIC BIAS2",
-			"MIC BIAS2", "ANCLeft Headset Mic",
-			"AMIC5", "MIC BIAS3",
-			"MIC BIAS3", "Handset Mic",
-			"AMIC6", "MIC BIAS4",
-			"MIC BIAS4", "Analog Mic6",
-			"DMIC0", "MIC BIAS1",
-			"MIC BIAS1", "Digital Mic0",
-			"DMIC1", "MIC BIAS1",
-			"MIC BIAS1", "Digital Mic1",
-			"DMIC2", "MIC BIAS3",
-			"MIC BIAS3", "Digital Mic2",
-			"DMIC3", "MIC BIAS3",
-			"MIC BIAS3", "Digital Mic3",
-			"DMIC4", "MIC BIAS4",
-			"MIC BIAS4", "Digital Mic4",
-			"DMIC5", "MIC BIAS4",
-			"MIC BIAS4", "Digital Mic5",
-			"SpkrLeft IN", "SPK1 OUT",
-			"SpkrRight IN", "SPK2 OUT";
+			"AMIC3", "MIC BIAS3",
+			"MIC BIAS3", "Secondary Mic";
 
 		qcom,msm-gpios =
-			"us_eu_gpio";
+			"ext_spk_gpio";
 		qcom,pinctrl-names =
-			"all_off",
-			"us_eu_gpio_act";
+			"spk_ext_pa_act",
+			"spk_ext_pa_sus";
 		pinctrl-names =
-			"all_off",
-			"us_eu_gpio_act";
-		pinctrl-0 = <&cross_conn_det_sus>;
-		pinctrl-1 = <&cross_conn_det_act>;
-		qcom,cdc-us-euro-gpios = <&msm_gpio 144 0>;
+			"spk_ext_pa_act",
+			"spk_ext_pa_sus";
+		pinctrl-0 = <&spk_ext_pa_active>;
+		pinctrl-1 = <&spk_ext_pa_suspend>;
+		qcom,msm-spk-ext-pa = <&msm_gpio 101 0>;
 
 		qcom,msm-mbhc-hphl-swh = <0>;
 		qcom,msm-mbhc-gnd-swh = <0>;
@@ -2328,11 +2318,6 @@
 				"msm-dai-q6-dev.12292", "msm-dai-q6-dev.12293";
 		asoc-codec = <&stub_codec>;
 		asoc-codec-names = "msm-stub-codec.1";
-		qcom,max-aux-codec = <2>;
-		qcom,aux-codec = "wsa881x.20170211", "wsa881x.20170212",
-				 "wsa881x.21170213", "wsa881x.21170214";
-		qcom,aux-codec-prefix = "SpkrLeft", "SpkrRight",
-					"SpkrLeft", "SpkrRight";
 	};
 
 	wcd9xxx_intc: wcd9xxx-irq {
@@ -2358,6 +2343,11 @@
 		clock-names = "osr_clk";
 		clocks = <&clock_gcc clk_div_clk2>;
 		qcom,node_has_rpm_clock;
+		qcom,codec-mclk-clk-freq = <9600000>;
+		pinctrl-names = "i2s_mclk_sleep",
+				"i2s_mclk_active";
+		pinctrl-0 = <&mclk_line_sus>;
+		pinctrl-1 = <&mclk_line_act>;
 		#clock-cells = <1>;
 	};
 
@@ -2896,10 +2886,10 @@
 		status = "ok";
 		qcom,mode = <1>;
 		qcom,pull = <5>;
-		qcom,vin-sel = <0>;
+		qcom,vin-sel = <3>;
 		qcom,src-sel = <2>;
 		qcom,master-en = <1>;
-		qcom,out-strength = <2>;
+		qcom,out-strength = <3>;
 	};
 	gpio@c600 {
 		status = "ok";
@@ -2916,6 +2906,17 @@
 		qcom,src-sel = <2>;
 		qcom,master-en = <1>;
 		status = "okay";
+	};
+};
+
+&pmi8950_gpios {
+	gpio@c000 {
+		status = "ok";
+		qcom,mode = <1>;
+		qcom,pull = <5>;
+		qcom,src-sel = <6>;
+		qcom,master-en = <1>;
+		qcom,out-strength = <2>;
 	};
 };
 

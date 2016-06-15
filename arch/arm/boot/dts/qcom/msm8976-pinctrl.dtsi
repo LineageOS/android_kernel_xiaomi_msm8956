@@ -31,6 +31,22 @@
 			};
 		};
 
+		spk-ext-pa {
+			qcom,pins = <&gp 101>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <0>;
+			label = "spk-ext-pa-sw";
+			spk_ext_pa_active: lines_on {
+				drive-strength = <8>;
+				output-low;
+				bias-pull-down;
+			};
+			spk_ext_pa_suspend: lines_off {
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
 		cdc-reset-line {
 			qcom,pins = <&gp 133>;
 			qcom,num-grp-pins = <1>;
@@ -64,9 +80,23 @@
 			};
 		};
 
+		mclk-line {
+			qcom,pins = <&gp 116>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <1>;
+			label = "mclk-line";
+			mclk_line_act: mclk_line_on {
+				drive-strength = <8>;
+			};
+			mclk_line_sus: mclk_line_off {
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
 		cdc-pdm-2-lines {
-			qcom,pins = <&gp 116>, <&gp 117>, <&gp 118>, <&gp 119>;
-			qcom,num-grp-pins = <4>;
+			qcom,pins = <&gp 117>, <&gp 118>, <&gp 119>;
+			qcom,num-grp-pins = <3>;
 			qcom,pin-func = <2>;
 			label = "cdc-pdm-2-lines";
 			cdc_pdm_lines_2_act: pdm_lines_2_on {
@@ -87,6 +117,21 @@
 			uart_console_sleep: uart-console {
 				drive-strength = <2>;
 				bias-pull-down;
+			};
+		};
+
+		hall_int_pin {
+			qcom,pins = <&gp 107>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "hall_int_pin";
+			hall_int_active: active {
+				drive-strength = <6>;
+				bias-pull-up;
+			};
+			hall_int_suspend: suspend {
+				drive-strength = <6>;
+				bias-pull-up;
 			};
 		};
 
@@ -700,6 +745,30 @@
 			cam_sensor_mclk2_sleep: cam_sensor_mclk2_sleep {
 				drive-strength = <2>; /* 2 MA */
 				bias-pull-down; /* PULL DOWN */
+			};
+		};
+
+		pmx_ts_power_active {
+			qcom,pins = <&gp 134>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "pmx_ts_power_active";
+
+			ts_power_active: ts_power_active {
+				drive-strength = <16>;
+				bias-pull-up;
+			};
+		};
+
+		pmx_ts_power_suspend {
+			qcom,pins = <&gp 134>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "pmx_ts_power_suspend";
+
+			ts_power_suspend: ts_power_suspend {
+				drive-strength = <16>;
+				bias-disable;
 			};
 		};
 
@@ -1466,6 +1535,30 @@
 			wsa_vi_sus: vi_sense_off {
 				drive-strength = <2>;
 				bias-pull-down;
+			};
+		};
+
+		pmx_ts_power_ldo_active {
+			qcom,pins = <&gp 134>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "pmx_ts_power_ldo_active";
+
+			ts_power_ldo_active: ts_power_ldo_active {
+				drive-strength = <16>;
+				bias-pull-up;
+			};
+		};
+
+		pmx_ts_power_ldo_suspend {
+			qcom,pins = <&gp 134>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "pmx_ts_power_ldo_suspend";
+
+			ts_power_ldo_suspend: ts_power_ldo_suspend {
+				drive-strength = <16>;
+				bias-disable;
 			};
 		};
 
