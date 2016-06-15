@@ -17,7 +17,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 
-int sd_slot_plugoutt = 0;
+bool sd_slot_plugoutt = false;
 extern int sdhci_msm_disable_sd_vdd(void);
 
 struct mmc_gpio {
@@ -65,7 +65,7 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 	if (unlikely(status < 0))
 		goto out;
 
-	sd_slot_plugoutt = gpio_get_value_cansleep(ctx->cd_gpio);
+	sd_slot_plugoutt = gpio_get_value_cansleep(ctx->cd_gpio) == 1;
 
 	if (status ^ ctx->status) {
 		pr_info("%s: slot status change detected (%d -> %d), GPIO_ACTIVE_%s\n",
@@ -75,7 +75,7 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 		ctx->status = status;
 
 		/* Schedule a card detection after a debounce timeout */
-		if (sd_slot_plugoutt == 1) {
+		if (sd_slot_plugoutt) {
 			if (mmc_hostname(host) != NULL && !strcmp(mmc_hostname(host), "mmc1"))
 				sdhci_msm_disable_sd_vdd();
 			mmc_detect_change(host, msecs_to_jiffies(0));

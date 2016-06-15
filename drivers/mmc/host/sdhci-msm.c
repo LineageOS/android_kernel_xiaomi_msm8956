@@ -45,7 +45,7 @@
 #include "sdhci-msm-ice.h"
 #include "cmdq_hci.h"
 
-extern int sd_slot_plugoutt;
+extern bool sd_slot_plugoutt;
 struct sdhci_msm_reg_data *sd_vdd_vreg = NULL;
 
 enum sdc_mpm_pin_state {
@@ -1343,7 +1343,7 @@ static int sdhci_msm_dt_parse_vreg_info(struct device *dev,
 
 	*vreg_data = vreg;
 
-	if (vreg->is_sd_vdd == true)
+	if (vreg->is_sd_vdd)
 		sd_vdd_vreg = vreg;
 
 	dev_dbg(dev, "%s: %s %s vol=[%d %d]uV, curr=[%d %d]uA\n",
@@ -2124,7 +2124,7 @@ static int sdhci_msm_vreg_enable(struct sdhci_msm_reg_data *vreg)
 {
 	int ret = 0;
 
-	if (vreg != NULL && vreg->is_sd_vdd == 1 && sd_slot_plugoutt == 1)
+	if (vreg != NULL && vreg->is_sd_vdd && sd_slot_plugoutt)
 		return ret;
 
 	/* Put regulator in HPM (high power mode) */
@@ -2187,7 +2187,7 @@ out:
 int  sdhci_msm_disable_sd_vdd(void)
 {
 	int ret = 0;
-	if ((sd_vdd_vreg != NULL) && (sd_vdd_vreg->is_sd_vdd == 1)) {
+	if (sd_vdd_vreg != NULL && sd_vdd_vreg->is_sd_vdd) {
 		pr_err("sdhci_msm_disable_sd_vdd \n");
 		ret = sdhci_msm_vreg_disable(sd_vdd_vreg);
 	}
@@ -4228,8 +4228,8 @@ static int sdhci_msm_resume(struct device *dev)
 					mmc_hostname(host->mmc), __func__, ret);
 	}
 
-	if (sd_slot_plugoutt == 1 && mmc_hostname(host->mmc) != NULL && !strcmp(mmc_hostname(host->mmc), "mmc1"))
-		sd_slot_plugoutt = gpio_get_value_cansleep(msm_host->pdata->status_gpio);
+	if (sd_slot_plugoutt && mmc_hostname(host->mmc) != NULL && !strcmp(mmc_hostname(host->mmc), "mmc1"))
+		sd_slot_plugoutt = gpio_get_value_cansleep(msm_host->pdata->status_gpio) == 1;
 
 	if (pm_runtime_suspended(dev)) {
 		pr_debug("%s: %s: runtime suspended, defer system resume\n",
