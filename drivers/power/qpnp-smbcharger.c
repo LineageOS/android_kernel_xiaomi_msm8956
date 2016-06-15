@@ -5580,41 +5580,6 @@ static int smbchg_battery_is_writeable(struct power_supply *psy,
 	return rc;
 }
 
-bool is_oldtest = false;
-void runin_work(struct smbchg_chip *chip, int batt_capacity)
-{
-	int rc;
-
-	if (!chip->usb_present) {
-		if (is_oldtest) {
-			rc = vote(chip->battchg_suspend_votable, BATTCHG_USER_EN_VOTER,
-					false, 0);
-			if (rc)
-				dev_err(chip->dev, "Couldn't enable charge rc=%d\n", rc);
-			is_oldtest = false;
-		}
-		return;
-	}
-
-	is_oldtest = true;
-
-	pr_info("%s: chip->usb_present = %d \n", __func__, chip->usb_present);
-
-	if (batt_capacity > 80) {
-		pr_debug("smbcharge_get_prop_batt_capacity > 80\n");
-		rc = vote(chip->battchg_suspend_votable, BATTCHG_USER_EN_VOTER,
-				true, 0);
-		if (rc)
-			dev_err(chip->dev, "Couldn't disenable charge rc=%d\n", rc);
-	} else if (batt_capacity < 60) {
-		pr_debug("smbcharge_get_prop_batt_capacity < 60\n");
-		rc = vote(chip->battchg_suspend_votable, BATTCHG_USER_EN_VOTER,
-				false, 0);
-		if (rc)
-			dev_err(chip->dev, "Couldn't enable charge rc=%d\n", rc);
-	}
-}
-
 static int smbchg_battery_get_property(struct power_supply *psy,
 				       enum power_supply_property prop,
 				       union power_supply_propval *val)
@@ -5669,7 +5634,6 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 	/* properties from fg */
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = get_prop_batt_capacity(chip);
-		runin_work(chip, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		val->intval = get_prop_batt_current_now(chip);
