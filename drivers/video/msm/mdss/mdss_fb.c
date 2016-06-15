@@ -1466,6 +1466,7 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 	return ret;
 }
 
+int esd_backlight = 0;
 static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 {
 	int ret = 0;
@@ -1531,9 +1532,11 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 			 */
 			if (IS_CALIB_MODE_BL(mfd))
 				mdss_fb_set_backlight(mfd, mfd->calib_mode_bl);
-			else if (!mfd->panel_info->mipi.post_init_delay ||
-				cur_panel_dead)
+			else if ((!mfd->panel_info->mipi.post_init_delay ||
+				cur_panel_dead) && esd_backlight) {
 				mdss_fb_set_backlight(mfd, mfd->unset_bl_level);
+				esd_backlight = 0;
+			}
 		}
 		mutex_unlock(&mfd->bl_lock);
 	}

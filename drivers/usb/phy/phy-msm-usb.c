@@ -5480,6 +5480,7 @@ struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 	struct msm_otg_platform_data *pdata;
 	int len = 0;
 	int res_gpio;
+	int usbid_switch;
 
 	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
 	if (!pdata) {
@@ -5544,6 +5545,12 @@ struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 			of_get_named_gpio(node, "qcom,usbid-gpio", 0);
 	if (pdata->usb_id_gpio < 0)
 		pr_debug("usb_id_gpio is not available\n");
+
+	usbid_switch = of_get_named_gpio(node, "qcom,usbid-switch", 0);
+	if (usbid_switch >= 0) {
+			gpio_request(usbid_switch, "USB_ID_SWITCH");
+			gpio_direction_output(usbid_switch, 1);
+	}
 
 	pdata->l1_supported = of_property_read_bool(node,
 				"qcom,hsusb-l1-supported");
