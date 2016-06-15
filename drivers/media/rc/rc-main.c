@@ -702,16 +702,24 @@ EXPORT_SYMBOL_GPL(rc_keydown_notimeout);
 static int ir_open(struct input_dev *idev)
 {
 	struct rc_dev *rdev = input_get_drvdata(idev);
+	int rc = 0;
 
-	return rdev->open(rdev);
+	mutex_lock(&rdev->lock);
+	rc = rdev->open(rdev);
+	mutex_unlock(&rdev->lock);
+
+	return rc;
 }
 
 static void ir_close(struct input_dev *idev)
 {
 	struct rc_dev *rdev = input_get_drvdata(idev);
 
-	 if (rdev)
+	 if (rdev) {
+		mutex_lock(&rdev->lock);
 		rdev->close(rdev);
+		mutex_unlock(&rdev->lock);
+	}
 }
 
 /* class for /sys/class/rc */
