@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1fa4df85_3d455f18",
+        "filename": "drivers/power/qpnp-fg.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 3780,
+      "author": {
+        "id": 13947
+      },
+      "writtenOn": "2016-08-15T12:10:42Z",
+      "side": 0,
+      "message": "also leave",
+      "range": {
+        "startLine": 3778,
+        "startChar": 0,
+        "endLine": 3780,
+        "endChar": 42
+      },
+      "revId": "670c537311ec5b6a536bba6f9000ff26e078e224",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}

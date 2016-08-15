@@ -22,6 +22,29 @@
       "revId": "5bffbf8d849bafb17bc5a781feb68057c471372f",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1fa4df85_dd49ab32",
+        "filename": "drivers/power/qpnp-fg.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 5702,
+      "author": {
+        "id": 13947
+      },
+      "writtenOn": "2016-08-15T12:10:42Z",
+      "side": 1,
+      "message": "Only this line, fixing drop 2% battery",
+      "range": {
+        "startLine": 5702,
+        "startChar": 0,
+        "endLine": 5702,
+        "endChar": 76
+      },
+      "revId": "5bffbf8d849bafb17bc5a781feb68057c471372f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
