@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1fa4df85_d223dabd",
+        "filename": "drivers/power/qpnp-fg.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1677,
+      "author": {
+        "id": 13947
+      },
+      "writtenOn": "2016-08-15T10:37:10Z",
+      "side": 1,
+      "message": "No need \"-2\", leave \"50\". Tested compiled Kernel latest source. Uniform percent drop",
+      "range": {
+        "startLine": 1677,
+        "startChar": 25,
+        "endLine": 1677,
+        "endChar": 27
+      },
+      "revId": "5bffbf8d849bafb17bc5a781feb68057c471372f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
