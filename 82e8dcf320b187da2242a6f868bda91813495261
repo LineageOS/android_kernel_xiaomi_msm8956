@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1fa4df85_f1492b32",
+        "filename": "drivers/power/qpnp-fg.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 5707,
+      "author": {
+        "id": 13947
+      },
+      "writtenOn": "2016-08-18T17:15:20Z",
+      "side": 1,
+      "message": "From this fixation, there was a bug drop 2% battery",
+      "range": {
+        "startLine": 5707,
+        "startChar": 3,
+        "endLine": 5707,
+        "endChar": 53
+      },
+      "revId": "82e8dcf320b187da2242a6f868bda91813495261",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
