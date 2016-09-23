@@ -55,11 +55,11 @@
 #define GF_SPIDEV_NAME      "goodix,fingerprint"
 /*device name after register in charater*/
 #define GF_DEV_NAME         "goodix_fp"
-#define	GF_INPUT_NAME	    "qwerty"	/*"goodix_fp" */
+#define	GF_INPUT_NAME	    "gf318m"	/*"goodix_fp" */
 
 #define	CHRD_DRIVER_NAME	"goodix_fp_spi"
 #define	CLASS_NAME		    "goodix_fp"
-#define SPIDEV_MAJOR		225	/* assigned */
+#define SPIDEV_MAJOR		154	/* assigned */
 #define N_SPI_MINORS		32	/* ... up to 256 */
 
 
@@ -108,6 +108,7 @@ static void gf_enable_irq(struct gf_dev *gf_dev)
 	if (gf_dev->irq_enabled) {
 		pr_warn("IRQ has been enabled.\n");
 	} else {
+		pr_warn("GOODIX enable_irq %i\n", gf_dev->irq);
 		enable_irq(gf_dev->irq);
 		gf_dev->irq_enabled = 1;
 	}
@@ -116,6 +117,7 @@ static void gf_enable_irq(struct gf_dev *gf_dev)
 static void gf_disable_irq(struct gf_dev *gf_dev)
 {
 	if (gf_dev->irq_enabled) {
+		pr_warn("GOODIX disable_irq %i\n", gf_dev->irq);
 		gf_dev->irq_enabled = 0;
 		disable_irq(gf_dev->irq);
 	} else {
@@ -130,6 +132,8 @@ static long spi_clk_max_rate(struct clk *clk, unsigned long rate)
 	long step_direction = -1;
 	long guess = rate;
 	int max_steps = 10;
+
+	pr_warn("GOODIX spi_clk_max_rate\n");
 
 	cur = clk_round_rate(clk, rate);
 	if (cur == rate)
@@ -167,6 +171,8 @@ static void spi_clock_set(struct gf_dev *gf_dev, int speed)
 	long rate;
 	int rc;
 
+	pr_warn("GOODIX spi_clock_set\n");
+
 	rate = spi_clk_max_rate(gf_dev->core_clk, speed);
 	if (rate < 0) {
 		pr_info("%s: no match found for requested clock frequency:%d",
@@ -179,7 +185,7 @@ static void spi_clock_set(struct gf_dev *gf_dev, int speed)
 
 static int gfspi_ioctl_clk_init(struct gf_dev *data)
 {
-	pr_debug("%s: enter\n", __func__);
+	pr_info("%s: enter\n", __func__);
 
 	data->clk_enabled = 0;
 	data->core_clk = clk_get(&data->spi->dev, "core_clk");
@@ -201,7 +207,7 @@ static int gfspi_ioctl_clk_enable(struct gf_dev *data)
 {
 	int err;
 
-	pr_debug("%s: enter\n", __func__);
+	pr_info("%s: enter\n", __func__);
 
 	if (data->clk_enabled)
 		return 0;
@@ -226,7 +232,7 @@ static int gfspi_ioctl_clk_enable(struct gf_dev *data)
 
 static int gfspi_ioctl_clk_disable(struct gf_dev *data)
 {
-	pr_debug("%s: enter\n", __func__);
+	pr_info("%s: enter\n", __func__);
 
 	if (!data->clk_enabled)
 		return 0;
@@ -240,7 +246,7 @@ static int gfspi_ioctl_clk_disable(struct gf_dev *data)
 
 static int gfspi_ioctl_clk_uninit(struct gf_dev *data)
 {
-	pr_debug("%s: enter\n", __func__);
+	pr_info("%s: enter\n", __func__);
 
 	if (data->clk_enabled)
 		gfspi_ioctl_clk_disable(data);
@@ -259,19 +265,23 @@ static int gfspi_ioctl_clk_uninit(struct gf_dev *data)
 }
 #endif
 
+int recurs = 0;
+
 static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct gf_dev *gf_dev = &gf;
 	struct gf_key gf_key = { 0 };
 	int retval = 0;
 	int i;
+	long rc;
 #ifdef AP_CONTROL_CLK
 	unsigned int speed = 0;
 #endif
+	pr_info("%s: enter\n", __func__);
+
 	if (_IOC_TYPE(cmd) != GF_IOC_MAGIC) {
 		return -ENODEV;
 	}
-
 	if (_IOC_DIR(cmd) & _IOC_READ)
 		retval =
 			!access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
@@ -282,10 +292,20 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return -EFAULT;
 	}
 
+recurs_l:
 	if (gf_dev->device_available == 0) {
 		if ((cmd == GF_IOC_POWER_ON) || (cmd == GF_IOC_POWER_OFF) || (cmd == GF_IOC_ENABLE_GPIO) || (cmd == GF_IOC_DISABLE_GPIO)) {
 			pr_info("power cmd\n");
 		} else{
+			if (recurs == 0) {
+				recurs = 1;
+				rc = gf_ioctl(filp, GF_IOC_ENABLE_GPIO, cmd);
+				pr_warn("GOODIX gf_ioctl recur GF_ENABLE_GPIO %i %li\n", GF_IOC_ENABLE_GPIO, rc);
+				rc = gf_ioctl(filp, GF_IOC_POWER_ON, cmd);
+				pr_warn("GOODIX gf_ioctl recur GF_POWER_ON %i %li\n", GF_IOC_POWER_ON, rc);
+				recurs = 0;
+				goto recurs_l;
+			}
 			pr_info("Sensor is power off currently. \n");
 			return -ENODEV;
 		}
@@ -362,6 +382,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		__put_user(gf_dev->fb_black, (u8 __user *) arg);
 		break;
 	case GF_IOC_POWER_ON:
+		pr_warn("GOODIX POWER ON\n");
 		if (gf_dev->device_available == 1)
 			pr_info("Sensor has already powered-on.\n");
 		else
@@ -376,6 +397,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		gf_dev->device_available = 0;
 		break;
 	case GF_IOC_ENABLE_GPIO:
+		pr_info("GOODIX %s: GF_IOC_ENABLE_GPIO\n", __func__);
 
 		if (gf_dev->irq_enabled) {
 			if (gpio_is_valid(gf_dev->irq_gpio)) {
@@ -403,6 +425,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #ifdef CONFIG_COMPAT
 static long gf_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	pr_info("%s: enter\n", __func__);
 	return gf_ioctl(filp, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif /*CONFIG_COMPAT*/
@@ -410,6 +433,7 @@ static long gf_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long a
 static irqreturn_t gf_irq(int irq, void *handle)
 {
 	struct gf_dev *gf_dev = &gf;
+	pr_info("%s: enter\n", __func__);
 #ifdef GF_FASYNC
 	if (gf_dev->async)
 		kill_fasync(&gf_dev->async, SIGIO, POLL_IN);
@@ -472,6 +496,7 @@ static int driver_init_partial(struct gf_dev *gf_dev)
 {
 	int ret = 0;
 	int rc;
+	pr_info("%s: enter\n", __func__);
 	if (gf_power_on(gf_dev)) {
 		ret = -ENODEV;
 		goto error;
@@ -514,6 +539,7 @@ static int driver_init_partial(struct gf_dev *gf_dev)
 
 
 	gf_dev->irq = gf_irq_num(gf_dev);
+	pr_info("gf:irq:%d\n", gf_dev->irq);
 #if 1
 	ret = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
 			IRQF_TRIGGER_RISING | IRQF_ONESHOT,
@@ -525,6 +551,7 @@ static int driver_init_partial(struct gf_dev *gf_dev)
 #endif
 	if (!ret) {
 		enable_irq_wake(gf_dev->irq);
+//		gf_dev->irq_enabled = 1;
 		gf_disable_irq(gf_dev);
 	}
 
@@ -657,6 +684,7 @@ static void gf_reg_key_kernel(struct gf_dev *gf_dev)
 {
 	int i;
 
+	pr_info("%s: enter\n", __func__);
 	set_bit(EV_KEY, gf_dev->input->evbit);
 	for (i = 0; i < ARRAY_SIZE(key_map); i++) {
 		set_bit(key_map[i].val, gf_dev->input->keybit);
@@ -748,6 +776,7 @@ static int gf_probe(struct platform_device *pdev)
 		gf_reg_key_kernel(gf_dev);
 	}
 
+	FUNC_EXIT();
 	return status;
 
 error:
@@ -851,10 +880,18 @@ static struct spi_driver gf_driver = {
 		.resume = gf_resume,
 	};
 
+extern int fingerprint_fpc1020_init;
+
 static int __init gf_init(void)
 {
 	int status;
 	FUNC_ENTRY();
+
+	pr_info("%s: enter\n", __func__);
+	if (fingerprint_fpc1020_init == 1) {
+		pr_info("FPC1020 driver init. remove GOODIX.\n");
+		return -ENODEV;
+	}
 
 	/* Claim our 256 reserved device numbers.  Then register a class
 	 * that will key udev/mdev to add/remove /dev nodes.  Last, register
