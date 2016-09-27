@@ -1746,7 +1746,8 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 		if (eb_info->eeprom_name != NULL)
 		{
 			if (strcmp(eb_info->eeprom_name, "s5k3p3_omida01") == 0 ||
-					strcmp(eb_info->eeprom_name, "s5k3p3_gt24c64") == 0) {
+	       			        strcmp(eb_info->eeprom_name, "s5k3p3_gt24c64") == 0 ||
+                                        strcmp(eb_info->eeprom_name, "s5k3p3_f16s01c") == 0) {
 				s5k3p3_set_otp_module_id(e_ctrl);
 			} else if (strcmp(eb_info->eeprom_name, "ov16880_f16v01a") == 0 ||
 					strcmp(eb_info->eeprom_name, "ov16880_omida05") == 0) {
