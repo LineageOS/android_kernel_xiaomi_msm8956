@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ff2e2bb8_a5399242",
+        "filename": "drivers/media/platform/msm/camera_v2/sensor/msm_sensor.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 1610,
+      "author": {
+        "id": 11883
+      },
+      "writtenOn": "2016-10-09T09:23:22Z",
+      "side": 1,
+      "message": "Tabs\nAlso use if () {} else {}",
+      "range": {
+        "startLine": 1605,
+        "startChar": 0,
+        "endLine": 1610,
+        "endChar": 9
+      },
+      "revId": "2ce8d89dd7cf045591ea5b3eb1b22cb51ee0b302",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
