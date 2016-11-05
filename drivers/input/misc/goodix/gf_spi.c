@@ -55,11 +55,11 @@
 #define GF_SPIDEV_NAME      "goodix,fingerprint"
 /*device name after register in charater*/
 #define GF_DEV_NAME         "goodix_fp"
-#define	GF_INPUT_NAME	    "qwerty"	/*"goodix_fp" */
+#define	GF_INPUT_NAME	    "gf318m"	/*"goodix_fp" */
 
 #define	CHRD_DRIVER_NAME	"goodix_fp_spi"
 #define	CLASS_NAME		    "goodix_fp"
-#define SPIDEV_MAJOR		225	/* assigned */
+#define SPIDEV_MAJOR		154	/* assigned */
 #define N_SPI_MINORS		32	/* ... up to 256 */
 
 
@@ -259,12 +259,15 @@ static int gfspi_ioctl_clk_uninit(struct gf_dev *data)
 }
 #endif
 
+int recurs = 0;
+
 static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct gf_dev *gf_dev = &gf;
 	struct gf_key gf_key = { 0 };
 	int retval = 0;
 	int i;
+	long rc;
 #ifdef AP_CONTROL_CLK
 	unsigned int speed = 0;
 #endif
@@ -282,10 +285,20 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return -EFAULT;
 	}
 
+recurs_l:
 	if (gf_dev->device_available == 0) {
 		if ((cmd == GF_IOC_POWER_ON) || (cmd == GF_IOC_POWER_OFF) || (cmd == GF_IOC_ENABLE_GPIO) || (cmd == GF_IOC_DISABLE_GPIO)) {
 			pr_info("power cmd\n");
 		} else{
+			if (recurs == 0) {
+				recurs = 1;
+				rc = gf_ioctl(filp, GF_IOC_ENABLE_GPIO, cmd);
+				pr_debug("GOODIX gf_ioctl recur GF_ENABLE_GPIO %i %li\n", GF_IOC_ENABLE_GPIO, rc);
+				rc = gf_ioctl(filp, GF_IOC_POWER_ON, cmd);
+				pr_debug("GOODIX gf_ioctl recur GF_POWER_ON %i %li\n", GF_IOC_POWER_ON, rc);
+				recurs = 0;
+				goto recurs_l;
+			}
 			pr_info("Sensor is power off currently. \n");
 			return -ENODEV;
 		}
