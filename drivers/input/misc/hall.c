@@ -15,13 +15,6 @@
 #include <linux/regulator/consumer.h>
 #include <linux/fb.h>
 
-#define KEY_HALL_OPEN                0x222
-#define KEY_HALL_CLOSE               0x223
-
-#define GPIO_HALL_EINT_PIN 107
-#define CONFIG_HALL_SYS
-
-
 struct hall_switch_info {
 	struct mutex io_lock;
 	u32 irq_gpio;
@@ -29,9 +22,7 @@ struct hall_switch_info {
 	int irq;
 	int hall_switch_state;
 	struct input_dev *ipdev;
-#ifdef CONFIG_HALL_SYS
 	struct class *hall_sys_class;
-#endif
 };
 
 struct hall_switch_info *global_hall_info;
@@ -39,26 +30,17 @@ struct hall_switch_info *global_hall_info;
 static irqreturn_t hall_interrupt(int irq, void *data)
 {
 	struct hall_switch_info *hall_info = data;
-	int hall_gpio;
-
-	hall_gpio = gpio_get_value_cansleep(hall_info->irq_gpio);
-	pr_err("Macle irq interrupt gpio = %d\n", hall_gpio);
+	int hall_gpio = gpio_get_value_cansleep(hall_info->irq_gpio);
 	if (hall_gpio == hall_info->hall_switch_state) {
 		return IRQ_HANDLED;
-	} else {
-		hall_info->hall_switch_state = hall_gpio;
-		pr_err("Macle report key s ");
-	}
-	if (hall_gpio) {
-			input_report_key(hall_info->ipdev, KEY_HALL_OPEN, 1);
-			input_report_key(hall_info->ipdev, KEY_HALL_OPEN, 0);
-			input_sync(hall_info->ipdev);
-	} else {
-			input_report_key(hall_info->ipdev, KEY_HALL_CLOSE, 1);
-			input_report_key(hall_info->ipdev, KEY_HALL_CLOSE, 0);
-			input_sync(hall_info->ipdev);
-	}
 
+	hall_info->hall_switch_state = hall_gpio;
+	pr_err("Macle report key s ");
+
+	input_report_key(hall_info->ipdev, SW_LID, 1);
+	input_report_key(hall_info->ipdev, SW_LID, 0);
+	input_sync(hall_info->ipdev);
+	
      return IRQ_HANDLED;
 }
 
@@ -75,12 +57,10 @@ static int hall_parse_dt(struct device *dev, struct hall_switch_info *pdata)
 	return 0;
 }
 
-
-static int hall_power_on(struct device *pdev)
-{
+static int hall_power_on(struct device *pdev) {
 	int ret = 0;
 	struct regulator *hall_vio;
-	#if 1
+
 	hall_vio = regulator_get(pdev, "vdd-io");
 	if (IS_ERR(hall_vio)) {
 		ret = -1;
@@ -101,16 +81,13 @@ static int hall_power_on(struct device *pdev)
 		dev_err(pdev, "Regulator vio enable failed ret=%d\n", ret);
 		return ret;
 	}
-	#endif
 	return ret;
 
 reg_vio_put:
 	regulator_put(hall_vio);
-
 	return ret;
 }
 
-#ifdef CONFIG_HALL_SYS
 static ssize_t hall_state_show(struct class *class,
 		struct class_attribute *attr, char *buf)
 {
@@ -127,8 +104,7 @@ static ssize_t hall_state_show(struct class *class,
 static struct class_attribute hall_state =
 	__ATTR(hall_state, S_IRUGO, hall_state_show, NULL);
 
-static int hall_register_class_dev(struct hall_switch_info *hall_info)
-{
+static int hall_register_class_dev(struct hall_switch_info *hall_info) {
 	int err;
 	if (!hall_info->hall_sys_class) {
 		hall_info->hall_sys_class = class_create(THIS_MODULE, "hall_class");
@@ -146,7 +122,6 @@ static int hall_register_class_dev(struct hall_switch_info *hall_info)
 	}
 	return 0;
 }
-#endif
 
 static int hall_probe(struct platform_device *pdev)
 {
@@ -190,7 +165,6 @@ static int hall_probe(struct platform_device *pdev)
 	}
 
 	hall_power_on(&pdev->dev);
-
 /*interrupt config*/
 	if (gpio_is_valid(hall_info->irq_gpio)) {
 		rc = gpio_request(hall_info->irq_gpio, "hall-switch-gpio");
@@ -209,7 +183,6 @@ static int hall_probe(struct platform_device *pdev)
 
 		hall_info->irq = gpio_to_irq(hall_info->irq_gpio);
 		pr_err("Macle irq = %d\n", hall_info->irq);
-
 		rc = devm_request_threaded_irq(&pdev->dev, hall_info->irq, NULL,
 			hall_interrupt,
 			IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING|IRQF_ONESHOT, "hall-switch-irq", hall_info);
@@ -224,9 +197,7 @@ static int hall_probe(struct platform_device *pdev)
 		goto free_input_device;
 	}
        pr_err("hall_probe end\n");
-#ifdef CONFIG_HALL_SYS
-	hall_register_class_dev(hall_info);
-#endif
+	    hall_register_class_dev(hall_info);
 	   global_hall_info = hall_info;
        return 0;
 err_irq:
@@ -248,9 +219,7 @@ free_struct:
 static int hall_remove(struct platform_device *pdev)
 {
 	struct hall_switch_info *hall = platform_get_drvdata(pdev);
-#ifdef CONFIG_HALL_SYS
 	class_destroy(hall->hall_sys_class);
-#endif
 	pr_err("hall_remove\n");
 	disable_irq_wake(hall->irq);
 	device_init_wakeup(&pdev->dev, 0);
@@ -259,7 +228,6 @@ static int hall_remove(struct platform_device *pdev)
 	input_unregister_device(hall->ipdev);
 	return 0;
 }
-
 
 
 static struct of_device_id sn_match_table[] = {
