@@ -715,6 +715,7 @@ struct mxt_data {
 	u8 lockdown_info[MXT_LOCKDOWN_SIZE];
 	u8 config_info[MXT_CONFIG_INFO_SIZE];
 	char *raw_ref_buf;
+	bool keypad_mode;
 
 	bool is_suspend;
 	/* Slowscan parameters	*/
@@ -1446,6 +1447,10 @@ static void mxt_proc_t100_messages(struct mxt_data *data, u8 *message)
 	u8 peak = 0;
 	int id;
 	int index = 0;
+
+	if(data->keypad_mode) {
+		return;
+	}
 
 	if (!input_dev || data->driver_paused)
 		return;
@@ -3705,6 +3710,36 @@ static ssize_t mxt_pause_store(struct device *dev,
 	}
 }
 
+static ssize_t mxt_keypad_mode_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int count;
+	char c;
+
+	c = data->keypad_mode ? '1' : '0';
+	count = sprintf(buf, "%c\n", c);
+
+	return count;
+}
+
+static ssize_t mxt_keypad_mode_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->keypad_mode = (i == 1);
+
+		dev_dbg(dev, "%s\n", i ? "hw keys off" : "hw keys on");
+		return count;
+	} else {
+		dev_dbg(dev, "keypad_mode write error\n");
+		return -EINVAL;
+	}
+}
+
 static ssize_t mxt_debug_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -5298,6 +5333,8 @@ static DEVICE_ATTR(debug_enable, S_IWUSR | S_IRUSR, mxt_debug_enable_show,
 			mxt_debug_enable_store);
 static DEVICE_ATTR(pause_driver, S_IWUSR | S_IRUSR, mxt_pause_show,
 			mxt_pause_store);
+static DEVICE_ATTR(keypad_mode, S_IWUSR | S_IRUSR, mxt_keypad_mode_show,
+			mxt_keypad_mode_store);
 static DEVICE_ATTR(version, S_IRUGO, mxt_version_show, NULL);
 static DEVICE_ATTR(build, S_IRUGO, mxt_build_show, NULL);
 static DEVICE_ATTR(slowscan_enable, S_IWUSR | S_IRUSR,
@@ -5319,6 +5356,7 @@ static struct attribute *mxt_attrs[] = {
 	&dev_attr_update_fw.attr,
 	&dev_attr_debug_enable.attr,
 	&dev_attr_pause_driver.attr,
+	&dev_attr_keypad_mode.attr,
 	&dev_attr_version.attr,
 	&dev_attr_build.attr,
 	&dev_attr_slowscan_enable.attr,
