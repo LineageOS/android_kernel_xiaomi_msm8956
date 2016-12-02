@@ -343,6 +343,7 @@ struct mxt_data {
 	u8 tchcfg[4];
 
 	struct bin_attribute mem_access_attr;
+	bool disable_keys;
 	bool debug_enabled;
 	bool debug_v2_enabled;
 	u8 *debug_msg_data;
@@ -2027,6 +2028,9 @@ static void mxt_proc_t15_messages(struct mxt_data *data, u8 *msg)
 		return;
 
 	if (!data->pdata->keymap || !data->pdata->num_keys)
+		return;
+
+	if(data->disable_keys)
 		return;
 
 	num_keys = data->pdata->num_keys[T15_T97_KEY];
@@ -4919,6 +4923,31 @@ out:
 	return ret;
 }
 
+static ssize_t atmel_mxt_ts_disable_keys_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	char c = data->disable_keys ? '1' : '0';
+	return count = sprintf(buf, "%c\n", c);
+
+}
+
+static ssize_t atmel_mxt_ts_disable_keys_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->disable_keys = (i == 1);
+
+		return count;
+	} else {
+		dev_dbg(dev, "disable_keys write error\n");
+		return -EINVAL;
+	}
+}
+
 static ssize_t mxt_debug_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -5076,6 +5105,8 @@ static DEVICE_ATTR(cmd, S_IWUSR, NULL,
 			mxt_cmd_store);
 static DEVICE_ATTR(depth, S_IWUSR | S_IRUSR, mxt_irq_depth_show,
 			mxt_irq_depth_store);
+static DEVICE_ATTR(disable_keys, S_IWUSR | S_IRUSR, atmel_mxt_ts_disable_keys_show,
+			atmel_mxt_ts_disable_keys_store);
 #if defined(CONFIG_MXT_PLUGIN_SUPPORT)
 static DEVICE_ATTR(plugin, S_IRWXUGO /*S_IWUSR | S_IRUSR*/, mxt_plugin_show,
 			mxt_plugin_store);
@@ -5123,6 +5154,7 @@ static struct attribute *mxt_attrs[] = {
 	&dev_attr_t25.attr,
 	&dev_attr_cmd.attr,
 	&dev_attr_depth.attr,
+	&dev_attr_disable_keys.attr,
 #if defined(CONFIG_MXT_PLUGIN_SUPPORT)
 	&dev_attr_plugin.attr,
 	&dev_attr_plugin_tag.attr,
