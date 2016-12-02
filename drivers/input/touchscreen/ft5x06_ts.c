@@ -299,6 +299,7 @@ struct ft5x06_ts_data {
 	u8 family_id;
 	struct dentry *dir;
 	u16 addr;
+	bool disable_keys;
 	bool suspended;
 	char *ts_info;
 	u8 *tch_data;
@@ -631,6 +632,9 @@ static irqreturn_t ft5x06_ts_interrupt(int irq, void *dev_id)
 
 		/* invalid combination */
 		if (!num_touches && !status && !id)
+			break;
+
+		if (y == 2100 && data->disable_keys)
 			break;
 
 		input_mt_slot(ip_dev, id);
@@ -2247,6 +2251,41 @@ static ssize_t ft5x06_lockdown_store(struct device *dev,
 
 static DEVICE_ATTR(tp_lock_down_info, (S_IWUSR|S_IRUGO|S_IWUGO), ft5x06_lockdown_show, ft5x06_lockdown_store);
 
+static ssize_t ft5x06_ts_disable_keys_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+	const char c = data->disable_keys ? '1' : '0';
+	return sprintf(buf, "%c\n", c);
+}
+
+static ssize_t ft5x06_ts_disable_keys_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->disable_keys = (i == 1);
+		return count;
+	} else {
+		dev_dbg(dev, "disable_keys write error\n");
+		return -EINVAL;
+	}
+}
+
+static DEVICE_ATTR(disable_keys, S_IWUSR | S_IRUSR, ft5x06_ts_disable_keys_show,
+		   ft5x06_ts_disable_keys_store);
+
+static struct attribute *ft5x06_ts_attrs[] = {
+	&dev_attr_disable_keys.attr,
+	NULL
+};
+
+static const struct attribute_group ft5x06_ts_attr_group = {
+	.attrs = ft5x06_ts_attrs,
+};
+
 static bool ft5x06_debug_addr_is_valid(int addr)
 {
 	if (addr < 0 || addr > 0xFF) {
@@ -3084,6 +3123,12 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 		goto free_update_fw_sys;
 	}
 
+	 err = sysfs_create_group(&client->dev.kobj, &ft5x06_ts_attr_group);
+	 if (err) {
+		dev_err(&client->dev, "Failure %d creating sysfs group\n",err);
+		goto free_reset_gpio;
+    }
+
 	data->dir = debugfs_create_dir(FT_DEBUG_DIR_NAME, NULL);
 	if (data->dir == NULL || IS_ERR(data->dir)) {
 		pr_err("debugfs_create_dir failed(%ld)\n", PTR_ERR(data->dir));
@@ -3341,6 +3386,7 @@ static int ft5x06_ts_remove(struct i2c_client *client)
 #endif
 
 	input_unregister_device(data->input_dev);
+	sysfs_remove_group(&client->dev.kobj, &ft5x06_ts_attr_group);
 
 	return 0;
 }
