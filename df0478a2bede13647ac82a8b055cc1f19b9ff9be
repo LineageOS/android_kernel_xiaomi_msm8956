@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a288981_facdae5e",
+        "filename": "fs/sdcardfs/derived_perm.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 232,
+      "author": {
+        "id": 13452
+      },
+      "writtenOn": "2017-02-08T15:12:04Z",
+      "side": 1,
+      "message": "Spammed by this :(",
+      "range": {
+        "startLine": 232,
+        "startChar": 10,
+        "endLine": 232,
+        "endChar": 60
+      },
+      "revId": "df0478a2bede13647ac82a8b055cc1f19b9ff9be",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
