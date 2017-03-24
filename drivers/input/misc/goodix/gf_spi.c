@@ -100,6 +100,10 @@ static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
 static struct gf_dev gf;
 
+#ifdef CONFIG_MACH_XIAOMI_KENZO
+extern int kenzo_fpsensor;
+#endif
+
 static int driver_init_partial(struct gf_dev *gf_dev);
 
 
@@ -108,9 +112,7 @@ static void gf_enable_irq(struct gf_dev *gf_dev)
 	if (gf_dev->irq_enabled) {
 		pr_warn("IRQ has been enabled.\n");
 	} else {
-		pr_warn("GOODIX enable_irq0 %i\n", gf_dev->irq);
 		enable_irq(gf_dev->irq);
-		pr_warn("GOODIX enable_irq1 %i\n", gf_dev->irq);
 		gf_dev->irq_enabled = 1;
 	}
 }
@@ -118,7 +120,6 @@ static void gf_enable_irq(struct gf_dev *gf_dev)
 static void gf_disable_irq(struct gf_dev *gf_dev)
 {
 	if (gf_dev->irq_enabled) {
-		pr_warn("GOODIX disenable_irq %i\n", gf_dev->irq);
 		gf_dev->irq_enabled = 0;
 		disable_irq(gf_dev->irq);
 	} else {
@@ -133,8 +134,6 @@ static long spi_clk_max_rate(struct clk *clk, unsigned long rate)
 	long step_direction = -1;
 	long guess = rate;
 	int max_steps = 10;
-
-	pr_warn("GOODIX spi_clk_max_rate\n");
 
 	cur = clk_round_rate(clk, rate);
 	if (cur == rate)
@@ -172,8 +171,6 @@ static void spi_clock_set(struct gf_dev *gf_dev, int speed)
 	long rate;
 	int rc;
 
-	pr_warn("GOODIX spi_clock_set\n");
-
 	rate = spi_clk_max_rate(gf_dev->core_clk, speed);
 	if (rate < 0) {
 		pr_info("%s: no match found for requested clock frequency:%d",
@@ -186,7 +183,7 @@ static void spi_clock_set(struct gf_dev *gf_dev, int speed)
 
 static int gfspi_ioctl_clk_init(struct gf_dev *data)
 {
-	pr_info("%s: enter\n", __func__);
+	pr_debug("%s: enter\n", __func__);
 
 	data->clk_enabled = 0;
 	data->core_clk = clk_get(&data->spi->dev, "core_clk");
@@ -208,7 +205,7 @@ static int gfspi_ioctl_clk_enable(struct gf_dev *data)
 {
 	int err;
 
-	pr_info("%s: enter\n", __func__);
+	pr_debug("%s: enter\n", __func__);
 
 	if (data->clk_enabled)
 		return 0;
@@ -233,7 +230,7 @@ static int gfspi_ioctl_clk_enable(struct gf_dev *data)
 
 static int gfspi_ioctl_clk_disable(struct gf_dev *data)
 {
-	pr_info("%s: enter\n", __func__);
+	pr_debug("%s: enter\n", __func__);
 
 	if (!data->clk_enabled)
 		return 0;
@@ -247,7 +244,7 @@ static int gfspi_ioctl_clk_disable(struct gf_dev *data)
 
 static int gfspi_ioctl_clk_uninit(struct gf_dev *data)
 {
-	pr_info("%s: enter\n", __func__);
+	pr_debug("%s: enter\n", __func__);
 
 	if (data->clk_enabled)
 		gfspi_ioctl_clk_disable(data);
@@ -278,12 +275,12 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #ifdef AP_CONTROL_CLK
 	unsigned int speed = 0;
 #endif
-
-	pr_warn("GOODIX gf_ioctl start %i\n", cmd);
+	unsigned int delay = 0;
 
 	if (_IOC_TYPE(cmd) != GF_IOC_MAGIC) {
 		return -ENODEV;
 	}
+
 	if (_IOC_DIR(cmd) & _IOC_READ)
 		retval =
 			!access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
@@ -302,9 +299,9 @@ recurs_l:
 			if (recurs == 0) {
 				recurs = 1;
 				rc = gf_ioctl(filp, GF_IOC_ENABLE_GPIO, cmd);
-				pr_warn("GOODIX gf_ioctl recur GF_ENABLE_GPIO %i %li\n", GF_IOC_ENABLE_GPIO, rc);
+				pr_debug("GOODIX gf_ioctl recur GF_ENABLE_GPIO %i %li\n", GF_IOC_ENABLE_GPIO, rc);
 				rc = gf_ioctl(filp, GF_IOC_POWER_ON, cmd);
-				pr_warn("GOODIX gf_ioctl recur GF_POWER_ON %i %li\n", GF_IOC_POWER_ON, rc);
+				pr_debug("GOODIX gf_ioctl recur GF_POWER_ON %i %li\n", GF_IOC_POWER_ON, rc);
 				recurs = 0;
 				goto recurs_l;
 			}
@@ -312,7 +309,6 @@ recurs_l:
 			return -ENODEV;
 		}
 	}
-	pr_warn("GOODIX gf_ioctl switch\n");
 
 	switch (cmd) {
 	case GF_IOC_DISABLE_IRQ:
@@ -339,6 +335,13 @@ recurs_l:
 		break;
 	case GF_IOC_RESET:
 		gf_hw_reset(gf_dev, 70);
+		break;
+	case GF_IOC_RESET_NEW:
+		retval = __get_user(delay, (u32 __user *) arg);
+		if (retval == 0)
+			gf_hw_reset(gf_dev, delay);
+		else
+			pr_warn("Failed to get reset delay from user. retval = %d\n", retval);
 		break;
 	case GF_IOC_COOLBOOT:
 		gf_power_off(gf_dev);
@@ -385,7 +388,6 @@ recurs_l:
 		__put_user(gf_dev->fb_black, (u8 __user *) arg);
 		break;
 	case GF_IOC_POWER_ON:
-		pr_warn("GOODIX POWER ON\n");
 		if (gf_dev->device_available == 1)
 			pr_info("Sensor has already powered-on.\n");
 		else
@@ -400,7 +402,6 @@ recurs_l:
 		gf_dev->device_available = 0;
 		break;
 	case GF_IOC_ENABLE_GPIO:
-		pr_info("GOODIX %s: GF_IOC_ENABLE_GPIO\n", __func__);
 
 		if (gf_dev->irq_enabled) {
 			if (gpio_is_valid(gf_dev->irq_gpio)) {
@@ -428,18 +429,25 @@ recurs_l:
 #ifdef CONFIG_COMPAT
 static long gf_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	pr_info("%s: enter\n", __func__);
 	return gf_ioctl(filp, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif /*CONFIG_COMPAT*/
 
 static irqreturn_t gf_irq(int irq, void *handle)
 {
-	struct gf_dev *gf_dev = &gf;
-	pr_info("%s: enter\n", __func__);
 #ifdef GF_FASYNC
-	if (gf_dev->async)
-		kill_fasync(&gf_dev->async, SIGIO, POLL_IN);
+	{
+		struct gf_dev *gf_dev = &gf;
+		if (gf_dev->async)
+			kill_fasync(&gf_dev->async, SIGIO, POLL_IN);
+	}
+#endif
+
+#ifdef GF_NETLINK_ENABLE
+	{
+		char msg[2] = { GF_NET_EVENT_IRQ, 0 };
+		sendnlmsg(msg);
+	}
 #endif
 
 	return IRQ_HANDLED;
@@ -451,8 +459,10 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 	struct gf_dev *gf_dev;
 	struct fb_event *evdata = data;
 	unsigned int blank;
+#ifdef GF_NETLINK_ENABLE
+	char msg[2];
+#endif
 
-	pr_info("%s: enter\n", __func__);
 	if (val != FB_EARLY_EVENT_BLANK)
 		return 0;
 	pr_info("[info] %s go to the goodix_fb_state_chg_callback value = %d\n",
@@ -469,6 +479,11 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 					kill_fasync(&gf_dev->async, SIGIO, POLL_IN);
 				}
 #endif
+#ifdef GF_NETLINK_ENABLE
+				msg[0] = GF_NET_EVENT_FB_BLACK;
+				msg[1] = 0;
+				sendnlmsg(msg);
+#endif
 				/*device unavailable */
 			}
 			break;
@@ -479,6 +494,11 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 				if (gf_dev->async) {
 					kill_fasync(&gf_dev->async, SIGIO, POLL_IN);
 				}
+#endif
+#ifdef GF_NETLINK_ENABLE
+				msg[0] = GF_NET_EVENT_FB_UNBLACK;
+				msg[1] = 0;
+				sendnlmsg(msg);
 #endif
 				/*device available */
 			}
@@ -500,7 +520,6 @@ static int driver_init_partial(struct gf_dev *gf_dev)
 {
 	int ret = 0;
 	int rc;
-	pr_info("%s: enter\n", __func__);
 	if (gf_power_on(gf_dev)) {
 		ret = -ENODEV;
 		goto error;
@@ -554,6 +573,7 @@ static int driver_init_partial(struct gf_dev *gf_dev)
 #endif
 	if (!ret) {
 		enable_irq_wake(gf_dev->irq);
+		gf_dev->irq_enabled = 1;
 		gf_disable_irq(gf_dev);
 	}
 
@@ -590,7 +610,6 @@ static int gf_open(struct inode *inode, struct file *filp)
 	struct gf_dev *gf_dev;
 	int status = -ENXIO;
 
-	pr_info("%s: enter\n", __func__);
 	FUNC_ENTRY();
 	mutex_lock(&device_list_lock);
 
@@ -624,7 +643,6 @@ static int gf_fasync(int fd, struct file *filp, int mode)
 	struct gf_dev *gf_dev = filp->private_data;
 	int ret;
 
-	pr_info("%s: enter\n", __func__);
 	FUNC_ENTRY();
 	ret = fasync_helper(fd, filp, mode, &gf_dev->async);
 	FUNC_EXIT();
@@ -638,7 +656,6 @@ static int gf_release(struct inode *inode, struct file *filp)
 	struct gf_dev *gf_dev;
 	int status = 0;
 
-	pr_info("%s: enter\n", __func__);
 	FUNC_ENTRY();
 	mutex_lock(&device_list_lock);
 	gf_dev = filp->private_data;
@@ -689,7 +706,6 @@ static void gf_reg_key_kernel(struct gf_dev *gf_dev)
 {
 	int i;
 
-	pr_info("%s: enter\n", __func__);
 	set_bit(EV_KEY, gf_dev->input->evbit);
 	for (i = 0; i < ARRAY_SIZE(key_map); i++) {
 		set_bit(key_map[i].val, gf_dev->input->keybit);
@@ -715,8 +731,14 @@ static int gf_probe(struct platform_device *pdev)
 	int ret;
 	struct regulator *vreg;
 #endif
-	pr_info("%s: enter\n", __func__);
 	FUNC_ENTRY();
+
+#ifdef CONFIG_MACH_XIAOMI_KENZO
+	if (kenzo_fpsensor != 2) {
+		pr_err("board no gdx fpsensor\n");
+		return -ENODEV;
+	}
+#endif
 
 	/* Initialize the driver data */
 	INIT_LIST_HEAD(&gf_dev->device_entry);
@@ -816,7 +838,6 @@ static int gf_remove(struct platform_device *pdev)
 {
 	struct gf_dev *gf_dev = &gf;
 	FUNC_ENTRY();
-	pr_info("%s: enter\n", __func__);
 
 	/* make sure ops on existing fds can abort cleanly */
 	if (gf_dev->irq) {
@@ -891,7 +912,6 @@ static int __init gf_init(void)
 	int status;
 	FUNC_ENTRY();
 
-	pr_info("%s: enter\n", __func__);
 	/* Claim our 256 reserved device numbers.  Then register a class
 	 * that will key udev/mdev to add/remove /dev nodes.  Last, register
 	 * the driver which manages those device numbers.
@@ -921,6 +941,10 @@ static int __init gf_init(void)
 		pr_warn("Failed to register SPI driver.\n");
 	}
 
+#ifdef GF_NETLINK_ENABLE
+	netlink_init();
+#endif
+
 	pr_info(" status = 0x%x\n", status);
 	FUNC_EXIT();
 	return 0;
@@ -930,6 +954,9 @@ module_init(gf_init);
 static void __exit gf_exit(void)
 {
 	FUNC_ENTRY();
+#ifdef GF_NETLINK_ENABLE
+	netlink_exit();
+#endif
 #if defined(USE_PLATFORM_BUS)
 	platform_driver_unregister(&gf_driver);
 #elif defined(USE_SPI_BUS)
