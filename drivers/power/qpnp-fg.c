@@ -234,10 +234,19 @@ static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
 	SETTING(BCL_MH_THRESHOLD, 0x47C,   3,      752),
 	SETTING(TERM_CURRENT,	 0x40C,   2,      250),
 	SETTING(CHG_TERM_CURRENT, 0x4F8,   2,      250),
+#ifdef CONFIG_MACH_XIAOMI_KENZO
+	SETTING(IRQ_VOLT_EMPTY,	 0x458,   3,      3100),
+	SETTING(CUTOFF_VOLTAGE,	 0x40C,   0,      3200),
+#else
 	SETTING(IRQ_VOLT_EMPTY,	 0x458,   3,      3350),
 	SETTING(CUTOFF_VOLTAGE,	 0x40C,   0,      3400),
+#endif
 	SETTING(VBAT_EST_DIFF,	 0x000,   0,      30),
+#ifdef CONFIG_MACH_XIAOMI_KENZO
+	SETTING(DELTA_SOC,	 0x450,   3,      1),
+#else
 	SETTING(DELTA_SOC,	 0x450,   3,      2),
+#endif
 	SETTING(SOC_MAX,	 0x458,   1,      85),
 	SETTING(SOC_MIN,	 0x458,   2,      15),
 	SETTING(BATT_LOW,	 0x458,   0,      4200),
